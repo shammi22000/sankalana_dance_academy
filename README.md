@@ -2,39 +2,6 @@
 
 A full-stack landing page application with a React/Vite frontend and a Node.js/Express backend using Clean Architecture, MVC, and the Repository Pattern.
 
-## Project Structure
-
-```txt
-root/
-  frontend/
-    src/
-      assets/       Shared image and brand references
-      components/   Reusable landing page UI components
-      pages/        Route-level pages
-      layouts/      Page shells
-      routes/       React Router definitions
-      services/     API clients
-      hooks/        Reusable React state logic
-      types/        Shared frontend types
-      utils/        Data/config helpers
-  backend/
-    src/
-      config/       Environment configuration
-      domain/       Entities and repository contracts
-      application/  DTOs, errors, and use cases
-      infrastructure/ MongoDB adapters and repository implementations
-      presentation/ Controllers, routes, and Express middleware
-```
-
-## How Architecture Is Applied
-
-Clean Architecture is used on the backend by keeping the domain and application layers independent from Express. Repository interfaces such as `ContactInquiryRepository` and `StudentRegistrationRepository` live in the domain layer, use cases depend on those interfaces, and in-memory repository implementations live in infrastructure.
-
-MVC is applied in the presentation layer: routes map HTTP endpoints, controllers translate HTTP requests/responses, and the use case acts as the application model/service boundary. Controllers do not contain business logic.
-
-The Repository Pattern is used through domain repository interfaces. Contact inquiries, student registrations, and teacher registrations are stored in MongoDB through infrastructure repository implementations.
-
-The frontend communicates with the backend through service files in `frontend/src/services`, keeping API concerns out of UI components.
 
 ## Run The App
 
