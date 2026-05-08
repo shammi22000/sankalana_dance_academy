@@ -1,0 +1,88 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  background: #0e0710;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 72% 14%, rgba(41, 216, 255, 0.13), transparent 28rem),
+    radial-gradient(circle at 20% 26%, rgba(217, 28, 255, 0.12), transparent 25rem),
+    linear-gradient(180deg, #120713 0%, #160818 42%, #100710 100%);
+  color: #f8f0ff;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+img {
+  display: block;
+}
+
+::selection {
+  background: rgba(217, 28, 255, 0.45);
+}
+
+.glass-panel {
+  background: linear-gradient(145deg, rgba(42, 18, 45, 0.88), rgba(17, 10, 22, 0.9));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+@keyframes carouselProgress {
+  from {
+    width: 0%;
+  }
+
+  to {
+    width: 100%;
+  }
+}
+
+@keyframes heroImageZoom {
+  from {
+    transform: scale(1);
+  }
+
+  to {
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[carouselProgress_4600ms_linear_forwards\] {
+    animation: none;
+    width: 100%;
+  }
+
+  .motion-safe\:animate-\[heroImageZoom_6200ms_ease-out_forwards\] {
+    animation: none;
+  }
+}

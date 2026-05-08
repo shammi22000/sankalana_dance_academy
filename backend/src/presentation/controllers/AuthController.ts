@@ -1,0 +1,36 @@
+import type { NextFunction, Request, Response } from "express";
+import type { AuthenticateStudentUseCase } from "../../application/use-cases/AuthenticateStudentUseCase";
+import type { AuthenticateTeacherUseCase } from "../../application/use-cases/AuthenticateTeacherUseCase";
+
+export class AuthController {
+  constructor(
+    private readonly authenticateStudentUseCase: AuthenticateStudentUseCase,
+    private readonly authenticateTeacherUseCase: AuthenticateTeacherUseCase,
+  ) {}
+
+  loginStudent = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      const authentication = await this.authenticateStudentUseCase.execute(request.body);
+
+      response.status(200).json({
+        success: true,
+        data: authentication,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  loginTeacher = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      const authentication = await this.authenticateTeacherUseCase.execute(request.body);
+
+      response.status(200).json({
+        success: true,
+        data: authentication,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+}
