@@ -83,7 +83,7 @@ Success response:
 }
 ```
 
-Success response excludes password data:
+Success response excludes password data
 
 ```json
 {
@@ -111,7 +111,6 @@ Success response excludes password data:
 }
 ```
 
-`identity` can be either the student's email address or username. Success response includes the student profile and a simple session token.
 
 `POST /api/teacher-registrations`
 
