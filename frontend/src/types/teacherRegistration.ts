@@ -1,5 +1,5 @@
 export type TeachingDay = "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
-export type TeacherApplicationStatus = "draft" | "submitted";
+export type TeacherApplicationStatus = "pending" | "approved" | "rejected";
 
 export interface TeacherRegistrationPayload {
   fullName: string;
@@ -11,10 +11,11 @@ export interface TeacherRegistrationPayload {
   qualifications: string;
   biography: string;
   availableDays: TeachingDay[];
+  avatarFileName?: string;
+  avatarImageDataUrl?: string;
   portfolioFileName?: string;
   password: string;
   confirmPassword: string;
-  applicationStatus: TeacherApplicationStatus;
 }
 
 export interface TeacherRegistration {
@@ -28,6 +29,8 @@ export interface TeacherRegistration {
   qualifications: string;
   biography: string;
   availableDays: TeachingDay[];
+  avatarFileName?: string;
+  avatarImageDataUrl?: string;
   portfolioFileName?: string;
   accountRole: "teacher";
   applicationStatus: TeacherApplicationStatus;

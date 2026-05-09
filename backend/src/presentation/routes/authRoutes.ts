@@ -6,6 +6,7 @@ export function createAuthRoutes(authController: AuthController) {
 
   router.post("/student/login", authController.loginStudent);
   router.post("/teacher/login", authController.loginTeacher);
+  router.post("/admin/login", authController.loginAdmin);
 
   return router;
 }

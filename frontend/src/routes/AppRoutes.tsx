@@ -8,6 +8,8 @@ import { StudentDashboardPage } from "../pages/StudentDashboardPage";
 import { TeacherRegistrationPage } from "../pages/TeacherRegistrationPage";
 import { TeacherLoginPage } from "../pages/TeacherLoginPage";
 import { TeacherDashboardPage } from "../pages/TeacherDashboardPage";
+import { AdminLoginPage } from "../pages/AdminLoginPage";
+import { AdminDashboardPage } from "../pages/AdminDashboardPage";
 
 export function AppRoutes() {
   return (
@@ -21,6 +23,9 @@ export function AppRoutes() {
       <Route path="/teacher-register" element={<TeacherRegistrationPage />} />
       <Route path="/teacher-login" element={<TeacherLoginPage />} />
       <Route path="/teacher-dashboard" element={<TeacherDashboardPage />} />
+      <Route path="/admin" element={<AdminLoginPage />} />
+      <Route path="/admin-dashboard" element={<AdminDashboardPage />} />
+      <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

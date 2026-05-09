@@ -1,6 +1,11 @@
 import { randomUUID } from "crypto";
 
 export type StudentGender = "Female" | "Male" | "Other" | "Prefer not to say";
+export type StudentApprovalStatus = "pending" | "approved" | "rejected";
+
+export function normalizeStudentApprovalStatus(status: unknown): StudentApprovalStatus {
+  return status === "approved" || status === "rejected" || status === "pending" ? status : "pending";
+}
 
 export interface StudentRegistrationProps {
   id: string;
@@ -12,17 +17,19 @@ export interface StudentRegistrationProps {
   dateOfBirth: string;
   passwordHash: string;
   accountRole: "student";
+  approvalStatus: StudentApprovalStatus;
   createdAt: Date;
 }
 
 export class StudentRegistration {
   private constructor(private readonly props: StudentRegistrationProps) {}
 
-  static create(input: Omit<StudentRegistrationProps, "id" | "accountRole" | "createdAt">) {
+  static create(input: Omit<StudentRegistrationProps, "id" | "accountRole" | "approvalStatus" | "createdAt">) {
     return new StudentRegistration({
       ...input,
       id: randomUUID(),
       accountRole: "student",
+      approvalStatus: "pending",
       createdAt: new Date(),
     });
   }
@@ -30,6 +37,7 @@ export class StudentRegistration {
   static fromPersistence(input: StudentRegistrationProps) {
     return new StudentRegistration({
       ...input,
+      approvalStatus: normalizeStudentApprovalStatus(input.approvalStatus),
       createdAt: new Date(input.createdAt),
     });
   }
@@ -44,6 +52,10 @@ export class StudentRegistration {
 
   get passwordHash() {
     return this.props.passwordHash;
+  }
+
+  get approvalStatus() {
+    return this.props.approvalStatus;
   }
 
   toPersistence(): StudentRegistrationProps {
@@ -63,6 +75,7 @@ export class StudentRegistration {
       gender: this.props.gender,
       dateOfBirth: this.props.dateOfBirth,
       accountRole: this.props.accountRole,
+      approvalStatus: this.props.approvalStatus,
       createdAt: this.props.createdAt.toISOString(),
     };
   }

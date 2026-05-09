@@ -3,7 +3,7 @@ import type {
   AuthenticateTeacherDTO,
   TeacherAuthenticationResponseDTO,
 } from "../dto/AuthenticateTeacherDTO";
-import { UnauthorizedError, ValidationError } from "../errors/ApplicationError";
+import { ForbiddenError, UnauthorizedError, ValidationError } from "../errors/ApplicationError";
 import { verifyPassword } from "../security/passwordHash";
 import type { TeacherRegistrationRepository } from "../../domain/repositories/TeacherRegistrationRepository";
 
@@ -26,6 +26,14 @@ export class AuthenticateTeacherUseCase {
 
     if (!teacher || !verifyPassword(password, teacher.passwordHash)) {
       throw new UnauthorizedError();
+    }
+
+    if (teacher.applicationStatus !== "approved") {
+      throw new ForbiddenError(
+        teacher.applicationStatus === "rejected"
+          ? "This teacher account was rejected by admin."
+          : "This teacher account is pending admin approval.",
+      );
     }
 
     return {

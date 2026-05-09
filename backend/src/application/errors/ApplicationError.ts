@@ -20,3 +20,15 @@ export class UnauthorizedError extends ApplicationError {
     super(message, 401);
   }
 }
+
+export class ForbiddenError extends ApplicationError {
+  constructor(message = "Access denied.") {
+    super(message, 403);
+  }
+}
+
+export class NotFoundError extends ApplicationError {
+  constructor(message = "Resource not found.") {
+    super(message, 404);
+  }
+}

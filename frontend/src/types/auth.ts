@@ -21,3 +21,15 @@ export interface TeacherAuthentication {
     issuedAt: string;
   };
 }
+
+export interface AdminAuthentication {
+  admin: {
+    username: string;
+    displayName: string;
+    role: "admin";
+  };
+  session: {
+    token: string;
+    issuedAt: string;
+  };
+}

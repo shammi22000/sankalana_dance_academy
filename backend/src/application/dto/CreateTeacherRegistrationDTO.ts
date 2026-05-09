@@ -10,10 +10,11 @@ export interface CreateTeacherRegistrationDTO {
   qualifications: string;
   biography: string;
   availableDays: TeachingDay[];
+  avatarFileName?: string;
+  avatarImageDataUrl?: string;
   portfolioFileName?: string;
   password: string;
   confirmPassword: string;
-  applicationStatus?: TeacherApplicationStatus;
 }
 
 export interface TeacherRegistrationResponseDTO {
@@ -27,6 +28,8 @@ export interface TeacherRegistrationResponseDTO {
   qualifications: string;
   biography: string;
   availableDays: TeachingDay[];
+  avatarFileName?: string;
+  avatarImageDataUrl?: string;
   portfolioFileName?: string;
   accountRole: "teacher";
   applicationStatus: TeacherApplicationStatus;

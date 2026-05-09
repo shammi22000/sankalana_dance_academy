@@ -1,4 +1,5 @@
 export type StudentGender = "Female" | "Male" | "Other" | "Prefer not to say";
+export type StudentApprovalStatus = "pending" | "approved" | "rejected";
 
 export interface StudentRegistrationPayload {
   fullName: string;
@@ -20,6 +21,7 @@ export interface StudentRegistration {
   gender: StudentGender;
   dateOfBirth: string;
   accountRole: "student";
+  approvalStatus: StudentApprovalStatus;
   createdAt: string;
 }
 
@@ -31,4 +33,3 @@ export interface StudentRegistrationApiResponse<T> {
     details?: Record<string, string>;
   };
 }
-

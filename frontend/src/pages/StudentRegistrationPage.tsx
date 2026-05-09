@@ -172,7 +172,7 @@ export function StudentRegistrationPage() {
 
             {registeredStudent && (
               <p className="rounded-2xl border border-cyanGlow/30 bg-cyanGlow/10 px-5 py-4 text-center text-sm font-bold text-cyanGlow">
-                Registration saved for {registeredStudent.fullName}. You can now continue to login.
+                Registration saved for {registeredStudent.fullName}. You can login after admin approval.
               </p>
             )}
 

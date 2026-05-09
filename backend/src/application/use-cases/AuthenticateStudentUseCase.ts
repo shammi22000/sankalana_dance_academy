@@ -3,7 +3,7 @@ import type {
   AuthenticateStudentDTO,
   StudentAuthenticationResponseDTO,
 } from "../dto/AuthenticateStudentDTO";
-import { UnauthorizedError, ValidationError } from "../errors/ApplicationError";
+import { ForbiddenError, UnauthorizedError, ValidationError } from "../errors/ApplicationError";
 import { verifyPassword } from "../security/passwordHash";
 import type { StudentRegistrationRepository } from "../../domain/repositories/StudentRegistrationRepository";
 
@@ -26,6 +26,14 @@ export class AuthenticateStudentUseCase {
 
     if (!student || !verifyPassword(password, student.passwordHash)) {
       throw new UnauthorizedError();
+    }
+
+    if (student.approvalStatus !== "approved") {
+      throw new ForbiddenError(
+        student.approvalStatus === "rejected"
+          ? "This student account was rejected by admin."
+          : "This student account is pending admin approval.",
+      );
     }
 
     return {

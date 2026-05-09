@@ -6,13 +6,13 @@ import { ValidationError } from "../errors/ApplicationError";
 import { hashPassword } from "../security/passwordHash";
 import {
   TeacherRegistration,
-  type TeacherApplicationStatus,
   type TeachingDay,
 } from "../../domain/entities/TeacherRegistration";
 import type { TeacherRegistrationRepository } from "../../domain/repositories/TeacherRegistrationRepository";
 
 const teachingDays: TeachingDay[] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const applicationStatuses: TeacherApplicationStatus[] = ["draft", "submitted"];
+const danceStyleOptions = ["Kandyan Dancing", "Low Country Dancing", "Sabaragamu", "Contemporary"];
+const maxAvatarDataUrlLength = 1_500_000;
 
 export class CreateTeacherRegistrationUseCase {
   constructor(private readonly teacherRegistrationRepository: TeacherRegistrationRepository) {}
@@ -28,10 +28,11 @@ export class CreateTeacherRegistrationUseCase {
       qualifications: dto.qualifications?.trim() ?? "",
       biography: dto.biography?.trim() ?? "",
       availableDays: Array.isArray(dto.availableDays) ? dto.availableDays : [],
+      avatarFileName: dto.avatarFileName?.trim() || undefined,
+      avatarImageDataUrl: dto.avatarImageDataUrl?.trim() || undefined,
       portfolioFileName: dto.portfolioFileName?.trim() || undefined,
       password: dto.password ?? "",
       confirmPassword: dto.confirmPassword ?? "",
-      applicationStatus: dto.applicationStatus ?? "submitted",
     };
 
     const errors = this.validate(normalized);
@@ -58,9 +59,10 @@ export class CreateTeacherRegistrationUseCase {
       qualifications: normalized.qualifications,
       biography: normalized.biography,
       availableDays: normalized.availableDays,
+      avatarFileName: normalized.avatarFileName,
+      avatarImageDataUrl: normalized.avatarImageDataUrl,
       portfolioFileName: normalized.portfolioFileName,
       passwordHash: hashPassword(normalized.password),
-      applicationStatus: normalized.applicationStatus,
     });
 
     const savedRegistration = await this.teacherRegistrationRepository.save(teacherRegistration);
@@ -88,7 +90,9 @@ export class CreateTeacherRegistrationUseCase {
     }
 
     if (!dto.danceStyles || dto.danceStyles.length < 2) {
-      errors.danceStyles = "At least one dance style is required.";
+      errors.danceStyles = "Please select a dancing style.";
+    } else if (!danceStyleOptions.includes(dto.danceStyles)) {
+      errors.danceStyles = "Please select a valid dancing style.";
     }
 
     if (!Number.isFinite(Number(dto.experienceYears)) || Number(dto.experienceYears) < 0) {
@@ -109,16 +113,20 @@ export class CreateTeacherRegistrationUseCase {
       errors.availableDays = "Please select valid teaching days.";
     }
 
+    if (dto.avatarImageDataUrl) {
+      if (!/^data:image\/(png|jpe?g|webp);base64,/i.test(dto.avatarImageDataUrl)) {
+        errors.avatarImageDataUrl = "Avatar must be a PNG, JPG, or WebP image.";
+      } else if (dto.avatarImageDataUrl.length > maxAvatarDataUrlLength) {
+        errors.avatarImageDataUrl = "Avatar image must be smaller than 1 MB.";
+      }
+    }
+
     if (!dto.password || dto.password.length < 6) {
       errors.password = "Password must be at least 6 characters.";
     }
 
     if (dto.password !== dto.confirmPassword) {
       errors.confirmPassword = "Passwords must match.";
-    }
-
-    if (dto.applicationStatus && !applicationStatuses.includes(dto.applicationStatus)) {
-      errors.applicationStatus = "Please select a valid application status.";
     }
 
     return errors;

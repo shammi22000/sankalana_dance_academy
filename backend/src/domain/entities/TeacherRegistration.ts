@@ -1,7 +1,11 @@
 import { randomUUID } from "crypto";
 
 export type TeachingDay = "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
-export type TeacherApplicationStatus = "draft" | "submitted";
+export type TeacherApplicationStatus = "pending" | "approved" | "rejected";
+
+export function normalizeTeacherApplicationStatus(status: unknown): TeacherApplicationStatus {
+  return status === "approved" || status === "rejected" || status === "pending" ? status : "pending";
+}
 
 export interface TeacherRegistrationProps {
   id: string;
@@ -14,6 +18,8 @@ export interface TeacherRegistrationProps {
   qualifications: string;
   biography: string;
   availableDays: TeachingDay[];
+  avatarFileName?: string;
+  avatarImageDataUrl?: string;
   portfolioFileName?: string;
   passwordHash: string;
   accountRole: "teacher";
@@ -24,11 +30,12 @@ export interface TeacherRegistrationProps {
 export class TeacherRegistration {
   private constructor(private readonly props: TeacherRegistrationProps) {}
 
-  static create(input: Omit<TeacherRegistrationProps, "id" | "accountRole" | "createdAt">) {
+  static create(input: Omit<TeacherRegistrationProps, "id" | "accountRole" | "applicationStatus" | "createdAt">) {
     return new TeacherRegistration({
       ...input,
       id: randomUUID(),
       accountRole: "teacher",
+      applicationStatus: "pending",
       createdAt: new Date(),
     });
   }
@@ -37,6 +44,7 @@ export class TeacherRegistration {
     return new TeacherRegistration({
       ...input,
       availableDays: [...input.availableDays],
+      applicationStatus: normalizeTeacherApplicationStatus(input.applicationStatus),
       createdAt: new Date(input.createdAt),
     });
   }
@@ -51,6 +59,10 @@ export class TeacherRegistration {
 
   get passwordHash() {
     return this.props.passwordHash;
+  }
+
+  get applicationStatus() {
+    return this.props.applicationStatus;
   }
 
   toPersistence(): TeacherRegistrationProps {
@@ -73,6 +85,8 @@ export class TeacherRegistration {
       qualifications: this.props.qualifications,
       biography: this.props.biography,
       availableDays: this.props.availableDays,
+      avatarFileName: this.props.avatarFileName,
+      avatarImageDataUrl: this.props.avatarImageDataUrl,
       portfolioFileName: this.props.portfolioFileName,
       accountRole: this.props.accountRole,
       applicationStatus: this.props.applicationStatus,

@@ -1,5 +1,7 @@
 import {
+  normalizeStudentApprovalStatus,
   StudentRegistration,
+  type StudentApprovalStatus,
   type StudentRegistrationProps,
 } from "../../domain/entities/StudentRegistration";
 import type { StudentRegistrationRepository } from "../../domain/repositories/StudentRegistrationRepository";
@@ -29,6 +31,32 @@ export class MongoStudentRegistrationRepository implements StudentRegistrationRe
     return this.toEntity(await collection.findOne({ username }));
   }
 
+  async findByApprovalStatus(status: StudentApprovalStatus): Promise<StudentRegistration[]> {
+    const collection = await this.database.collection<StudentRegistrationDocument>("studentRegistrations");
+    const filter =
+      status === "pending"
+        ? { $or: [{ approvalStatus: status }, { approvalStatus: { $exists: false } }] }
+        : { approvalStatus: status };
+    const documents = await collection.find(filter).sort({ createdAt: -1 }).toArray();
+
+    return documents.flatMap((document) => {
+      const entity = this.toEntity(document);
+
+      return entity ? [entity] : [];
+    });
+  }
+
+  async updateApprovalStatus(id: string, status: StudentApprovalStatus): Promise<StudentRegistration | null> {
+    const collection = await this.database.collection<StudentRegistrationDocument>("studentRegistrations");
+    const result = await collection.findOneAndUpdate(
+      { id },
+      { $set: { approvalStatus: status } },
+      { returnDocument: "after" },
+    );
+
+    return this.toEntity(result);
+  }
+
   private toEntity(document: StudentRegistrationDocument | null): StudentRegistration | null {
     if (!document) {
       return null;
@@ -44,6 +72,7 @@ export class MongoStudentRegistrationRepository implements StudentRegistrationRe
       dateOfBirth: document.dateOfBirth,
       passwordHash: document.passwordHash,
       accountRole: document.accountRole,
+      approvalStatus: normalizeStudentApprovalStatus(document.approvalStatus),
       createdAt: document.createdAt,
     };
 

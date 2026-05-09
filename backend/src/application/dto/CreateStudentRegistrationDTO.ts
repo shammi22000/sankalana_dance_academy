@@ -1,4 +1,4 @@
-import type { StudentGender } from "../../domain/entities/StudentRegistration";
+import type { StudentApprovalStatus, StudentGender } from "../../domain/entities/StudentRegistration";
 
 export interface CreateStudentRegistrationDTO {
   fullName: string;
@@ -20,6 +20,6 @@ export interface StudentRegistrationResponseDTO {
   gender: StudentGender;
   dateOfBirth: string;
   accountRole: "student";
+  approvalStatus: StudentApprovalStatus;
   createdAt: string;
 }
-

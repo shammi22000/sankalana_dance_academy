@@ -50,6 +50,7 @@ export class MongoDatabase {
       database
         .collection<StudentRegistrationDocument>("studentRegistrations")
         .createIndex({ username: 1 }, { unique: true }),
+      database.collection<StudentRegistrationDocument>("studentRegistrations").createIndex({ approvalStatus: 1 }),
       database.collection<TeacherRegistrationDocument>("teacherRegistrations").createIndex({ id: 1 }, { unique: true }),
       database
         .collection<TeacherRegistrationDocument>("teacherRegistrations")
@@ -57,6 +58,7 @@ export class MongoDatabase {
       database
         .collection<TeacherRegistrationDocument>("teacherRegistrations")
         .createIndex({ username: 1 }, { unique: true }),
+      database.collection<TeacherRegistrationDocument>("teacherRegistrations").createIndex({ applicationStatus: 1 }),
     ]);
   }
 }
