@@ -25,13 +25,24 @@ export function useContactForm(source: string) {
       await submitContactInquiry({ ...values, source });
       setValues(initialValues);
       setState("success");
+
+      return {
+        success: true,
+        message: "Inquiry received. We will reach out soon.",
+      };
     } catch (submitError) {
-      setState("error");
-      setError(
+      const message =
         submitError instanceof Error
           ? submitError.message
-          : "Unable to submit your inquiry right now.",
-      );
+          : "Unable to submit your inquiry right now.";
+
+      setState("error");
+      setError(message);
+
+      return {
+        success: false,
+        message,
+      };
     }
   }, [source, values]);
 

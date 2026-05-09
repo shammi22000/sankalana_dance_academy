@@ -4,15 +4,14 @@ import { Link } from "react-router-dom";
 import { PageFooter } from "../components/PageFooter";
 import { PageHeader } from "../components/PageHeader";
 import { registerStudent } from "../services/studentRegistrationService";
-import type { StudentGender, StudentRegistration } from "../types/studentRegistration";
+import type { StudentGender } from "../types/studentRegistration";
+import { showErrorAlert, showSuccessAlert } from "../utils/alerts";
 
 const inputClass =
   "min-h-14 w-full rounded-lg border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold text-white outline-none transition placeholder:text-white/35 focus:border-champagne/60 focus:ring-2 focus:ring-champagne/20 sm:text-base";
 
 export function StudentRegistrationPage() {
-  const [registeredStudent, setRegisteredStudent] = useState<StudentRegistration | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -20,8 +19,6 @@ export function StudentRegistrationPage() {
     const formData = new FormData(form);
 
     setIsSubmitting(true);
-    setError(null);
-    setRegisteredStudent(null);
 
     try {
       const student = await registerStudent({
@@ -35,10 +32,14 @@ export function StudentRegistrationPage() {
         confirmPassword: String(formData.get("confirmPassword") ?? ""),
       });
 
-      setRegisteredStudent(student);
       form.reset();
+      await showSuccessAlert(
+        "Registration Submitted",
+        `Registration saved for ${student.fullName}. You can login after admin approval.`,
+      );
     } catch (registrationError) {
-      setError(
+      await showErrorAlert(
+        "Registration Failed",
         registrationError instanceof Error
           ? registrationError.message
           : "Unable to register student right now.",
@@ -169,18 +170,6 @@ export function StudentRegistrationPage() {
               {isSubmitting ? "Saving..." : "Register"}
               <ArrowRight size={28} />
             </button>
-
-            {registeredStudent && (
-              <p className="rounded-2xl border border-cyanGlow/30 bg-cyanGlow/10 px-5 py-4 text-center text-sm font-bold text-cyanGlow">
-                Registration saved for {registeredStudent.fullName}. You can login after admin approval.
-              </p>
-            )}
-
-            {error && (
-              <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-5 py-4 text-center text-sm font-bold text-red-200">
-                {error}
-              </p>
-            )}
 
             <div className="flex flex-col gap-4 border-t border-white/10 pt-8 text-sm font-semibold text-white/80 sm:flex-row sm:items-center sm:justify-between">
               <p>

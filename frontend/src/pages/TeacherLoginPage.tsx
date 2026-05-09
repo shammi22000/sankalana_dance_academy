@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { AuthLoginPage } from "../components/AuthLoginPage";
 import { loginTeacher } from "../services/authService";
 import type { LoginCredentials } from "../types/auth";
+import { showSuccessAlert } from "../utils/alerts";
 
 export function TeacherLoginPage() {
   const navigate = useNavigate();
@@ -10,11 +11,10 @@ export function TeacherLoginPage() {
     const authentication = await loginTeacher(credentials);
 
     localStorage.setItem("sankalanaTeacherSession", JSON.stringify(authentication));
-    window.setTimeout(() => {
-      navigate("/teacher-dashboard", { replace: true });
-    }, 400);
+    await showSuccessAlert("Login Successful", `Welcome back, ${authentication.teacher.fullName}.`);
+    navigate("/teacher-dashboard", { replace: true });
 
-    return `Welcome back, ${authentication.teacher.fullName}. Login successful.`;
+    return;
   }
 
   return (

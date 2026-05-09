@@ -29,6 +29,7 @@ import {
 import type { AdminAuthentication } from "../types/auth";
 import type { StudentRegistration } from "../types/studentRegistration";
 import type { TeacherRegistration } from "../types/teacherRegistration";
+import { showErrorAlert, showSuccessAlert } from "../utils/alerts";
 
 const adminSessionKey = "sankalanaAdminSession";
 
@@ -101,7 +102,6 @@ export function AdminDashboardPage() {
     teachers: [],
   });
   const [isLoadingPending, setIsLoadingPending] = useState(true);
-  const [adminError, setAdminError] = useState("");
   const [activeRequestKey, setActiveRequestKey] = useState<string | null>(null);
   const pendingRequests = useMemo(
     () =>
@@ -125,7 +125,6 @@ export function AdminDashboardPage() {
       .then((registrations) => {
         if (!ignore) {
           setPendingRegistrations(registrations);
-          setAdminError("");
         }
       })
       .catch((error) => {
@@ -138,7 +137,7 @@ export function AdminDashboardPage() {
             return;
           }
 
-          setAdminError(message);
+          void showErrorAlert("Unable to Load Requests", message);
         }
       })
       .finally(() => {
@@ -163,7 +162,6 @@ export function AdminDashboardPage() {
 
   async function handleUpdateRequest(request: PendingRegistrationItem, status: "approved" | "rejected") {
     setActiveRequestKey(request.key);
-    setAdminError("");
 
     try {
       if (request.role === "student") {
@@ -176,8 +174,15 @@ export function AdminDashboardPage() {
         students: current.students.filter((student) => student.id !== request.id),
         teachers: current.teachers.filter((teacher) => teacher.id !== request.id),
       }));
+      await showSuccessAlert(
+        status === "approved" ? "Registration Approved" : "Registration Rejected",
+        `${request.name} has been ${status}.`,
+      );
     } catch (error) {
-      setAdminError(error instanceof Error ? error.message : "Unable to update registration.");
+      await showErrorAlert(
+        "Update Failed",
+        error instanceof Error ? error.message : "Unable to update registration.",
+      );
     } finally {
       setActiveRequestKey(null);
     }
@@ -370,12 +375,6 @@ export function AdminDashboardPage() {
                   <h3 className="text-3xl font-black text-[#f4e7fb]">Recent Enrolment Requests</h3>
 
                   <div className="mt-7 grid gap-4">
-                    {adminError && (
-                      <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-5 py-4 text-sm font-bold text-red-200">
-                        {adminError}
-                      </p>
-                    )}
-
                     {isLoadingPending && (
                       <p className="rounded-2xl bg-white/[0.06] px-5 py-4 text-sm font-bold text-white/68">
                         Loading pending registrations...

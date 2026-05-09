@@ -5,6 +5,7 @@ import { danceImages } from "../assets/danceImages";
 import { PageFooter } from "../components/PageFooter";
 import { PageHeader } from "../components/PageHeader";
 import { loginAdmin } from "../services/authService";
+import { showErrorAlert, showSuccessAlert } from "../utils/alerts";
 
 const adminSessionKey = "sankalanaAdminSession";
 
@@ -14,7 +15,6 @@ function hasAdminSession() {
 
 export function AdminLoginPage() {
   const navigate = useNavigate();
-  const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (hasAdminSession()) {
@@ -28,15 +28,18 @@ export function AdminLoginPage() {
     const password = String(formData.get("password") ?? "");
 
     setIsSubmitting(true);
-    setError("");
 
     try {
       const authentication = await loginAdmin({ username, password });
 
       localStorage.setItem(adminSessionKey, JSON.stringify(authentication));
+      await showSuccessAlert("Login Successful", "Welcome back, Admin.");
       navigate("/admin-dashboard", { replace: true });
     } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : "Invalid admin username or password.");
+      await showErrorAlert(
+        "Login Failed",
+        loginError instanceof Error ? loginError.message : "Invalid admin username or password.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -119,12 +122,6 @@ export function AdminLoginPage() {
                 <p className="text-center text-sm font-bold italic text-white/48">
                   Default demo credentials: admin / admin
                 </p>
-
-                {error && (
-                  <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-5 py-4 text-center text-sm font-bold text-red-200">
-                    {error}
-                  </p>
-                )}
               </form>
             </div>
           </div>

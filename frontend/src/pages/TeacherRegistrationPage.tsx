@@ -1,9 +1,10 @@
 import { ChangeEvent, FormEvent, useRef, useState } from "react";
-import { ArrowRight, CheckCircle2, CloudUpload, ImagePlus, X } from "lucide-react";
+import { ArrowRight, CloudUpload, ImagePlus, X } from "lucide-react";
 import { PageFooter } from "../components/PageFooter";
 import { PageHeader } from "../components/PageHeader";
 import { registerTeacher } from "../services/teacherRegistrationService";
-import type { TeacherRegistration, TeachingDay } from "../types/teacherRegistration";
+import type { TeachingDay } from "../types/teacherRegistration";
+import { showErrorAlert, showSuccessAlert } from "../utils/alerts";
 import { cn } from "../utils/cn";
 
 const inputClass =
@@ -22,11 +23,8 @@ export function TeacherRegistrationPage() {
   const [availableDays, setAvailableDays] = useState<TeachingDay[]>([]);
   const [avatarFileName, setAvatarFileName] = useState("");
   const [avatarPreviewDataUrl, setAvatarPreviewDataUrl] = useState("");
-  const [avatarError, setAvatarError] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState("");
-  const [registeredTeacher, setRegisteredTeacher] = useState<TeacherRegistration | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   function toggleTeachingDay(day: TeachingDay) {
     setAvailableDays((currentDays) =>
@@ -40,8 +38,6 @@ export function TeacherRegistrationPage() {
     const input = event.currentTarget;
     const file = input.files?.[0];
 
-    setAvatarError(null);
-
     if (!file) {
       setAvatarFileName("");
       setAvatarPreviewDataUrl("");
@@ -51,16 +47,16 @@ export function TeacherRegistrationPage() {
     if (!avatarFileTypes.includes(file.type)) {
       setAvatarFileName("");
       setAvatarPreviewDataUrl("");
-      setAvatarError("Please attach a PNG, JPG, or WebP image.");
       input.value = "";
+      void showErrorAlert("Invalid Image", "Please attach a PNG, JPG, or WebP image.");
       return;
     }
 
     if (file.size > maxAvatarFileSize) {
       setAvatarFileName("");
       setAvatarPreviewDataUrl("");
-      setAvatarError("Avatar image must be smaller than 1 MB.");
       input.value = "";
+      void showErrorAlert("Image Too Large", "Avatar image must be smaller than 1 MB.");
       return;
     }
 
@@ -76,8 +72,8 @@ export function TeacherRegistrationPage() {
     reader.onerror = () => {
       setAvatarFileName("");
       setAvatarPreviewDataUrl("");
-      setAvatarError("Unable to read avatar image.");
       input.value = "";
+      void showErrorAlert("Upload Failed", "Unable to read avatar image.");
     };
 
     reader.readAsDataURL(file);
@@ -86,7 +82,6 @@ export function TeacherRegistrationPage() {
   function clearAvatarAttachment() {
     setAvatarFileName("");
     setAvatarPreviewDataUrl("");
-    setAvatarError(null);
 
     if (avatarInputRef.current) {
       avatarInputRef.current.value = "";
@@ -99,8 +94,6 @@ export function TeacherRegistrationPage() {
     const formData = new FormData(form);
 
     setIsSubmitting(true);
-    setError(null);
-    setRegisteredTeacher(null);
 
     try {
       const teacher = await registerTeacher({
@@ -120,13 +113,17 @@ export function TeacherRegistrationPage() {
         confirmPassword: String(formData.get("confirmPassword") ?? ""),
       });
 
-      setRegisteredTeacher(teacher);
       form.reset();
       setAvailableDays([]);
       clearAvatarAttachment();
       setSelectedFileName("");
+      await showSuccessAlert(
+        "Application Submitted",
+        `Application submitted for ${teacher.fullName}. You can login after admin approval.`,
+      );
     } catch (registrationError) {
-      setError(
+      await showErrorAlert(
+        "Application Failed",
         registrationError instanceof Error
           ? registrationError.message
           : "Unable to register teacher right now.",
@@ -199,7 +196,6 @@ export function TeacherRegistrationPage() {
                       Remove image
                     </button>
                   )}
-                  {avatarError && <p className="text-sm font-bold text-red-200">{avatarError}</p>}
                 </div>
 
                 <div className="grid content-start gap-5 sm:grid-cols-2">
@@ -367,18 +363,6 @@ export function TeacherRegistrationPage() {
               </button>
             </div>
 
-            {registeredTeacher && (
-              <p className="flex items-center justify-center gap-3 rounded-2xl border border-cyanGlow/30 bg-cyanGlow/10 px-5 py-4 text-center text-sm font-bold text-cyanGlow">
-                <CheckCircle2 size={20} />
-                Application submitted for {registeredTeacher.fullName}. You can login after admin approval.
-              </p>
-            )}
-
-            {error && (
-              <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-5 py-4 text-center text-sm font-bold text-red-200">
-                {error}
-              </p>
-            )}
           </form>
         </section>
       </main>
