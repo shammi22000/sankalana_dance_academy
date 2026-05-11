@@ -2,6 +2,7 @@ import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 
 const popupClass = {
+  container: "z-[10000]",
   popup: "rounded-2xl bg-[#140616] text-white shadow-[0_30px_90px_rgba(0,0,0,0.45)]",
   title: "text-[#f4e7fb]",
   htmlContainer: "text-white/70",
@@ -19,6 +20,13 @@ function showAlert(icon: "success" | "error" | "warning" | "info", title: string
     confirmButtonText: "OK",
     buttonsStyling: false,
     customClass: popupClass,
+    didOpen: () => {
+      const container = Swal.getContainer();
+
+      if (container) {
+        container.style.zIndex = "10000";
+      }
+    },
   });
 }
 
@@ -47,5 +55,12 @@ export function showConfirmAlert(title: string, text: string, confirmButtonText 
     reverseButtons: true,
     buttonsStyling: false,
     customClass: popupClass,
+    didOpen: () => {
+      const container = Swal.getContainer();
+
+      if (container) {
+        container.style.zIndex = "10000";
+      }
+    },
   });
 }

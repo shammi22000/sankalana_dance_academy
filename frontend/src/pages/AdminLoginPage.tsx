@@ -1,11 +1,11 @@
 import { FormEvent, useState } from "react";
 import { ArrowRight, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
-import { Navigate, useNavigate } from "react-router-dom";
 import { danceImages } from "../assets/danceImages";
 import { PageFooter } from "../components/PageFooter";
 import { PageHeader } from "../components/PageHeader";
 import { loginAdmin } from "../services/authService";
 import { showErrorAlert, showSuccessAlert } from "../utils/alerts";
+import { AdminDashboardPage } from "./AdminDashboardPage";
 
 const adminSessionKey = "sankalanaAdminSession";
 
@@ -14,11 +14,11 @@ function hasAdminSession() {
 }
 
 export function AdminLoginPage() {
-  const navigate = useNavigate();
+  const [hasSession, setHasSession] = useState(hasAdminSession);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (hasAdminSession()) {
-    return <Navigate to="/admin-dashboard" replace />;
+  if (hasSession) {
+    return <AdminDashboardPage onLogout={() => setHasSession(false)} />;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -34,7 +34,7 @@ export function AdminLoginPage() {
 
       localStorage.setItem(adminSessionKey, JSON.stringify(authentication));
       await showSuccessAlert("Login Successful", "Welcome back, Admin.");
-      navigate("/admin-dashboard", { replace: true });
+      setHasSession(true);
     } catch (loginError) {
       await showErrorAlert(
         "Login Failed",

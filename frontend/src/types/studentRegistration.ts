@@ -12,6 +12,15 @@ export interface StudentRegistrationPayload {
   confirmPassword: string;
 }
 
+export interface StudentRegistrationProfilePayload {
+  fullName: string;
+  email: string;
+  phone: string;
+  username: string;
+  gender: StudentGender;
+  dateOfBirth: string;
+}
+
 export interface StudentRegistration {
   id: string;
   fullName: string;

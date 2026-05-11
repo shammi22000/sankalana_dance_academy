@@ -20,6 +20,17 @@ export class MongoTeacherRegistrationRepository implements TeacherRegistrationRe
     return TeacherRegistration.fromPersistence(document);
   }
 
+  async findAll(): Promise<TeacherRegistration[]> {
+    const collection = await this.database.collection<TeacherRegistrationDocument>("teacherRegistrations");
+    const documents = await collection.find().sort({ createdAt: -1 }).toArray();
+
+    return documents.flatMap((document) => {
+      const entity = this.toEntity(document);
+
+      return entity ? [entity] : [];
+    });
+  }
+
   async findByEmail(email: string): Promise<TeacherRegistration | null> {
     const collection = await this.database.collection<TeacherRegistrationDocument>("teacherRegistrations");
 

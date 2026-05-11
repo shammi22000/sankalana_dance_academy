@@ -1,5 +1,10 @@
-import type { StudentApprovalStatus, StudentRegistration, StudentRegistrationApiResponse } from "../types/studentRegistration";
-import type { TeacherApplicationStatus, TeacherRegistration } from "../types/teacherRegistration";
+import type {
+  StudentApprovalStatus,
+  StudentRegistration,
+  StudentRegistrationApiResponse,
+  StudentRegistrationProfilePayload,
+} from "../types/studentRegistration";
+import type { TeacherApplicationStatus, TeacherRegistration, TeacherRegistrationPayload } from "../types/teacherRegistration";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api";
 const adminSessionKey = "sankalanaAdminSession";
@@ -35,6 +40,81 @@ export async function getPendingRegistrations(): Promise<PendingRegistrations> {
 
   if (!response.ok || !result?.success || !result.data) {
     throw new Error(result?.error?.message ?? "Unable to load pending registrations.");
+  }
+
+  return result.data;
+}
+
+export async function getTeacherRegistrations(): Promise<TeacherRegistration[]> {
+  const response = await fetch(`${API_BASE_URL}/admin/teacher-registrations`, {
+    headers: getAdminHeaders(),
+  });
+  const result = (await response.json().catch(() => null)) as
+    | StudentRegistrationApiResponse<TeacherRegistration[]>
+    | null;
+
+  if (!response.ok || !result?.success || !result.data) {
+    throw new Error(result?.error?.message ?? "Unable to load teacher registrations.");
+  }
+
+  return result.data;
+}
+
+export async function getStudentRegistrations(): Promise<StudentRegistration[]> {
+  const response = await fetch(`${API_BASE_URL}/admin/student-registrations`, {
+    headers: getAdminHeaders(),
+  });
+  const result = (await response.json().catch(() => null)) as
+    | StudentRegistrationApiResponse<StudentRegistration[]>
+    | null;
+
+  if (!response.ok || !result?.success || !result.data) {
+    throw new Error(result?.error?.message ?? "Unable to load student registrations.");
+  }
+
+  return result.data;
+}
+
+export async function createTeacherRegistration(payload: TeacherRegistrationPayload): Promise<TeacherRegistration> {
+  const response = await fetch(`${API_BASE_URL}/admin/teacher-registrations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAdminHeaders(),
+    },
+    body: JSON.stringify(payload),
+  });
+  const result = (await response.json().catch(() => null)) as
+    | StudentRegistrationApiResponse<TeacherRegistration>
+    | null;
+
+  if (!response.ok || !result?.success || !result.data) {
+    const details = result?.error?.details ? Object.values(result.error.details).join(" ") : "";
+    throw new Error(`${result?.error?.message ?? "Unable to create teacher."} ${details}`.trim());
+  }
+
+  return result.data;
+}
+
+export async function updateStudentRegistrationProfile(
+  id: string,
+  payload: StudentRegistrationProfilePayload,
+): Promise<StudentRegistration> {
+  const response = await fetch(`${API_BASE_URL}/admin/student-registrations/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAdminHeaders(),
+    },
+    body: JSON.stringify(payload),
+  });
+  const result = (await response.json().catch(() => null)) as
+    | StudentRegistrationApiResponse<StudentRegistration>
+    | null;
+
+  if (!response.ok || !result?.success || !result.data) {
+    const details = result?.error?.details ? Object.values(result.error.details).join(" ") : "";
+    throw new Error(`${result?.error?.message ?? "Unable to update student profile."} ${details}`.trim());
   }
 
   return result.data;

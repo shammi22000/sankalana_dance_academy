@@ -44,7 +44,10 @@ const manageRegistrationApprovalsUseCase = new ManageRegistrationApprovalsUseCas
   studentRegistrationRepository,
   teacherRegistrationRepository,
 );
-const adminRegistrationController = new AdminRegistrationController(manageRegistrationApprovalsUseCase);
+const adminRegistrationController = new AdminRegistrationController(
+  manageRegistrationApprovalsUseCase,
+  createTeacherRegistrationUseCase,
+);
 
 app.use(
   cors({

@@ -20,8 +20,11 @@ import {
 } from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { danceImages } from "../assets/danceImages";
+import { StudentManagementSection } from "../components/StudentManagementSection";
+import { TeacherManagementSection } from "../components/TeacherManagementSection";
 import {
   getPendingRegistrations,
+  getStudentRegistrations,
   updateStudentApprovalStatus,
   updateTeacherApplicationStatus,
   type PendingRegistrations,
@@ -93,15 +96,21 @@ function toTeacherRequest(teacher: TeacherRegistration): PendingRegistrationItem
   };
 }
 
-export function AdminDashboardPage() {
+interface AdminDashboardPageProps {
+  onLogout?: () => void;
+}
+
+export function AdminDashboardPage({ onLogout }: AdminDashboardPageProps = {}) {
   const navigate = useNavigate();
   const authentication = getStoredAdminSession();
   const hasAuthentication = Boolean(authentication);
+  const [activeSection, setActiveSection] = useState("Dashboard");
   const [pendingRegistrations, setPendingRegistrations] = useState<PendingRegistrations>({
     students: [],
     teachers: [],
   });
   const [isLoadingPending, setIsLoadingPending] = useState(true);
+  const [totalStudentCount, setTotalStudentCount] = useState(0);
   const [activeRequestKey, setActiveRequestKey] = useState<string | null>(null);
   const pendingRequests = useMemo(
     () =>
@@ -121,10 +130,11 @@ export function AdminDashboardPage() {
     let ignore = false;
 
     setIsLoadingPending(true);
-    getPendingRegistrations()
-      .then((registrations) => {
+    Promise.all([getPendingRegistrations(), getStudentRegistrations()])
+      .then(([registrations, students]) => {
         if (!ignore) {
           setPendingRegistrations(registrations);
+          setTotalStudentCount(students.length);
         }
       })
       .catch((error) => {
@@ -133,6 +143,7 @@ export function AdminDashboardPage() {
 
           if (message === "Admin login required.") {
             localStorage.removeItem(adminSessionKey);
+            onLogout?.();
             navigate("/admin", { replace: true });
             return;
           }
@@ -149,7 +160,7 @@ export function AdminDashboardPage() {
     return () => {
       ignore = true;
     };
-  }, [hasAuthentication, navigate]);
+  }, [hasAuthentication, navigate, onLogout]);
 
   if (!authentication) {
     return <Navigate to="/admin" replace />;
@@ -157,6 +168,7 @@ export function AdminDashboardPage() {
 
   function handleLogout() {
     localStorage.removeItem(adminSessionKey);
+    onLogout?.();
     navigate("/admin", { replace: true });
   }
 
@@ -190,7 +202,6 @@ export function AdminDashboardPage() {
 
   const sidebarItems = [
     { label: "Dashboard", icon: Grid2X2 },
-    { label: "Teacher Requests", icon: UserRoundPlus },
     { label: "Students", icon: UsersRound },
     { label: "Teachers", icon: GraduationCap },
     { label: "Classes", icon: CalendarDays },
@@ -198,7 +209,13 @@ export function AdminDashboardPage() {
   ];
 
   const stats = [
-    { label: "Total Students", value: "1,248", meta: "+12%", icon: UsersRound, accent: "text-cyanGlow" },
+    {
+      label: "Total Students",
+      value: isLoadingPending ? "--" : String(totalStudentCount).padStart(2, "0"),
+      meta: "Registered",
+      icon: UsersRound,
+      accent: "text-cyanGlow",
+    },
     {
       label: "Pending Enrolments",
       value: String(pendingRegistrations.students.length).padStart(2, "0"),
@@ -239,15 +256,17 @@ export function AdminDashboardPage() {
           </div>
 
           <nav className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-1" aria-label="Admin dashboard">
-            {sidebarItems.map((item, index) => {
+            {sidebarItems.map((item) => {
               const Icon = item.icon;
+              const isActive = activeSection === item.label;
 
               return (
                 <button
                   key={item.label}
                   type="button"
+                  onClick={() => setActiveSection(item.label)}
                   className={`flex min-h-14 items-center gap-4 rounded-2xl px-5 text-left text-sm font-black transition ${
-                    index === 0
+                    isActive
                       ? "bg-gradient-to-r from-orchid to-[#bb26ff] text-white shadow-[0_18px_45px_rgba(217,28,255,0.34)]"
                       : "text-white/[0.64] hover:bg-white/[0.08] hover:text-white"
                   }`}
@@ -289,6 +308,11 @@ export function AdminDashboardPage() {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_16%,rgba(188,38,255,0.21),transparent_28rem),radial-gradient(circle_at_84%_72%,rgba(41,216,255,0.14),transparent_25rem)]" />
           <div className="absolute inset-0 bg-gradient-to-br from-[#1b071f]/78 via-black to-[#00120f]" />
 
+          {activeSection === "Students" ? (
+            <StudentManagementSection />
+          ) : activeSection === "Teachers" ? (
+            <TeacherManagementSection />
+          ) : (
           <section className="relative z-10 mx-auto max-w-7xl">
             <div className="flex flex-col gap-7 xl:flex-row xl:items-start xl:justify-between">
               <div>
@@ -487,6 +511,7 @@ export function AdminDashboardPage() {
               </aside>
             </div>
           </section>
+          )}
         </main>
       </div>
     </div>

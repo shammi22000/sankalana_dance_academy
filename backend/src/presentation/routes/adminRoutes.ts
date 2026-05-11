@@ -26,6 +26,10 @@ export function createAdminRoutes(
   });
 
   router.get("/registrations/pending", adminRegistrationController.listPendingRegistrations);
+  router.get("/student-registrations", adminRegistrationController.listStudentRegistrations);
+  router.post("/teacher-registrations", adminRegistrationController.createTeacherRegistration);
+  router.get("/teacher-registrations", adminRegistrationController.listTeacherRegistrations);
+  router.patch("/student-registrations/:id", adminRegistrationController.updateStudentProfile);
   router.patch("/student-registrations/:id/approval", adminRegistrationController.updateStudentApprovalStatus);
   router.patch("/teacher-registrations/:id/approval", adminRegistrationController.updateTeacherApplicationStatus);
 

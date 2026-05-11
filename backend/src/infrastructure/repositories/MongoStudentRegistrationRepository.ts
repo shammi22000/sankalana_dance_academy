@@ -4,7 +4,10 @@ import {
   type StudentApprovalStatus,
   type StudentRegistrationProps,
 } from "../../domain/entities/StudentRegistration";
-import type { StudentRegistrationRepository } from "../../domain/repositories/StudentRegistrationRepository";
+import type {
+  StudentRegistrationProfileUpdate,
+  StudentRegistrationRepository,
+} from "../../domain/repositories/StudentRegistrationRepository";
 import type { MongoDatabase, StudentRegistrationDocument } from "../database/MongoDatabase";
 
 export class MongoStudentRegistrationRepository implements StudentRegistrationRepository {
@@ -17,6 +20,23 @@ export class MongoStudentRegistrationRepository implements StudentRegistrationRe
     await collection.replaceOne({ id: document.id }, document, { upsert: true });
 
     return StudentRegistration.fromPersistence(document);
+  }
+
+  async findAll(): Promise<StudentRegistration[]> {
+    const collection = await this.database.collection<StudentRegistrationDocument>("studentRegistrations");
+    const documents = await collection.find({}).sort({ createdAt: -1 }).toArray();
+
+    return documents.flatMap((document) => {
+      const entity = this.toEntity(document);
+
+      return entity ? [entity] : [];
+    });
+  }
+
+  async findById(id: string): Promise<StudentRegistration | null> {
+    const collection = await this.database.collection<StudentRegistrationDocument>("studentRegistrations");
+
+    return this.toEntity(await collection.findOne({ id }));
   }
 
   async findByEmail(email: string): Promise<StudentRegistration | null> {
@@ -44,6 +64,26 @@ export class MongoStudentRegistrationRepository implements StudentRegistrationRe
 
       return entity ? [entity] : [];
     });
+  }
+
+  async updateProfile(id: string, profile: StudentRegistrationProfileUpdate): Promise<StudentRegistration | null> {
+    const collection = await this.database.collection<StudentRegistrationDocument>("studentRegistrations");
+    const result = await collection.findOneAndUpdate(
+      { id },
+      {
+        $set: {
+          fullName: profile.fullName,
+          email: profile.email,
+          phone: profile.phone,
+          username: profile.username,
+          gender: profile.gender,
+          dateOfBirth: profile.dateOfBirth,
+        },
+      },
+      { returnDocument: "after" },
+    );
+
+    return this.toEntity(result);
   }
 
   async updateApprovalStatus(id: string, status: StudentApprovalStatus): Promise<StudentRegistration | null> {
