@@ -5,6 +5,7 @@ import type { StudentApprovalStatus, StudentGender } from "../../domain/entities
 import type { StudentRegistrationRepository } from "../../domain/repositories/StudentRegistrationRepository";
 import type { TeacherApplicationStatus } from "../../domain/entities/TeacherRegistration";
 import type { TeacherRegistrationRepository } from "../../domain/repositories/TeacherRegistrationRepository";
+import { hashPassword } from "../security/passwordHash";
 
 type RegistrationApprovalStatus = StudentApprovalStatus & TeacherApplicationStatus;
 
@@ -23,6 +24,11 @@ interface UpdateStudentProfileDTO {
   username: string;
   gender: StudentGender;
   dateOfBirth: string;
+}
+
+interface UpdatePasswordDTO {
+  password: string;
+  confirmPassword: string;
 }
 
 export class ManageRegistrationApprovalsUseCase {
@@ -107,6 +113,25 @@ export class ManageRegistrationApprovalsUseCase {
     return updatedStudent.toJSON();
   }
 
+  async updateStudentPassword(id: string, dto: UpdatePasswordDTO): Promise<StudentRegistrationResponseDTO> {
+    const errors = this.validatePasswordUpdate(dto);
+
+    if (Object.keys(errors).length > 0) {
+      throw new ValidationError(errors);
+    }
+
+    const updatedStudent = await this.studentRegistrationRepository.updatePasswordHash(
+      id,
+      hashPassword(dto.password),
+    );
+
+    if (!updatedStudent) {
+      throw new NotFoundError("Student registration not found.");
+    }
+
+    return updatedStudent.toJSON();
+  }
+
   async updateTeacherStatus(id: string, status: RegistrationApprovalStatus): Promise<TeacherRegistrationResponseDTO> {
     this.validateStatus(status);
 
@@ -117,6 +142,25 @@ export class ManageRegistrationApprovalsUseCase {
     }
 
     return teacher.toJSON();
+  }
+
+  async updateTeacherPassword(id: string, dto: UpdatePasswordDTO): Promise<TeacherRegistrationResponseDTO> {
+    const errors = this.validatePasswordUpdate(dto);
+
+    if (Object.keys(errors).length > 0) {
+      throw new ValidationError(errors);
+    }
+
+    const updatedTeacher = await this.teacherRegistrationRepository.updatePasswordHash(
+      id,
+      hashPassword(dto.password),
+    );
+
+    if (!updatedTeacher) {
+      throw new NotFoundError("Teacher registration not found.");
+    }
+
+    return updatedTeacher.toJSON();
   }
 
   private validateStatus(status: string): asserts status is RegistrationApprovalStatus {
@@ -152,6 +196,20 @@ export class ManageRegistrationApprovalsUseCase {
 
     if (!dto.dateOfBirth || Number.isNaN(Date.parse(dto.dateOfBirth))) {
       errors.dateOfBirth = "A valid date of birth is required.";
+    }
+
+    return errors;
+  }
+
+  private validatePasswordUpdate(dto: UpdatePasswordDTO): Record<string, string> {
+    const errors: Record<string, string> = {};
+
+    if (!dto.password || dto.password.length < 6) {
+      errors.password = "Password must be at least 6 characters.";
+    }
+
+    if (dto.password !== dto.confirmPassword) {
+      errors.confirmPassword = "Passwords must match.";
     }
 
     return errors;

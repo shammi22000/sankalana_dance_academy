@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clock3,
   IdCard,
+  LockKeyhole,
   Mail,
   Phone,
   Search,
@@ -21,6 +22,7 @@ import { createPortal } from "react-dom";
 import {
   getStudentRegistrations,
   updateStudentApprovalStatus,
+  updateStudentPassword,
   updateStudentRegistrationProfile,
 } from "../services/adminRegistrationService";
 import type {
@@ -427,6 +429,8 @@ function StudentProfileModal({
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPasswordEditing, setIsPasswordEditing] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const isApproved = student.status === "approved";
   const isRejected = student.status === "rejected";
 
@@ -453,6 +457,31 @@ function StudentProfileModal({
       );
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handlePasswordSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+
+    setIsUpdatingPassword(true);
+
+    try {
+      await updateStudentPassword(student.id, {
+        password: String(formData.get("password") ?? ""),
+        confirmPassword: String(formData.get("confirmPassword") ?? ""),
+      });
+      form.reset();
+      setIsPasswordEditing(false);
+      await showSuccessAlert("Password Updated", `${student.name}'s login password has been changed.`);
+    } catch (error) {
+      await showErrorAlert(
+        "Password Not Updated",
+        error instanceof Error ? error.message : "Unable to update student password.",
+      );
+    } finally {
+      setIsUpdatingPassword(false);
     }
   }
 
@@ -598,6 +627,79 @@ function StudentProfileModal({
                 {student.name} registered as a {student.gender.toLowerCase()} student and currently has a{" "}
                 <span className="font-black text-[#f0b7ff]">{statusLabel(student.status)}</span> account.
               </p>
+            </section>
+
+            <section className="rounded-2xl border border-white/10 bg-[#211028] p-5">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-cyanGlow/14 text-cyanGlow">
+                  <ShieldCheck size={23} />
+                </span>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-white/48">Account Security</p>
+                  <p className="mt-1 text-xl font-black text-white">Protected</p>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-3">
+                <ProfileDetail icon={LockKeyhole} label="Password" value="Protected - not viewable" />
+                <ProfileDetail icon={ShieldCheck} label="Password Storage" value="Stored as a secure hash" />
+              </div>
+              <p className="mt-4 rounded-xl border border-cyanGlow/20 bg-cyanGlow/8 px-4 py-3 text-sm font-semibold leading-6 text-white/66">
+                Admins can manage student access, but saved passwords are not exposed. Use a reset/change-password flow when a student needs new login credentials.
+              </p>
+
+              {isPasswordEditing ? (
+                <form className="mt-5 grid gap-4" onSubmit={handlePasswordSubmit}>
+                  <label className="grid gap-2">
+                    <span className={profileLabelClass}>New Password</span>
+                    <input
+                      className={profileInputClass}
+                      name="password"
+                      type="password"
+                      minLength={6}
+                      placeholder="New password"
+                      required
+                    />
+                  </label>
+                  <label className="grid gap-2">
+                    <span className={profileLabelClass}>Confirm Password</span>
+                    <input
+                      className={profileInputClass}
+                      name="confirmPassword"
+                      type="password"
+                      minLength={6}
+                      placeholder="Confirm password"
+                      required
+                    />
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsPasswordEditing(false)}
+                      disabled={isUpdatingPassword}
+                      className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/12 px-4 text-sm font-black text-white/70 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isUpdatingPassword}
+                      className="inline-flex min-h-11 items-center justify-center rounded-xl bg-cyanGlow px-4 text-sm font-black text-[#061014] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {isUpdatingPassword ? "Updating..." : "Save Password"}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsPasswordEditing(true)}
+                  disabled={isSaving}
+                  className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-cyanGlow/35 px-5 text-sm font-black text-cyanGlow transition hover:bg-cyanGlow/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Set New Password
+                </button>
+              )}
             </section>
 
             <div className="grid gap-3">

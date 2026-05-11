@@ -18,5 +18,6 @@ export interface StudentRegistrationRepository {
   findByUsername(username: string): Promise<StudentRegistration | null>;
   findByApprovalStatus(status: StudentApprovalStatus): Promise<StudentRegistration[]>;
   updateProfile(id: string, profile: StudentRegistrationProfileUpdate): Promise<StudentRegistration | null>;
+  updatePasswordHash(id: string, passwordHash: string): Promise<StudentRegistration | null>;
   updateApprovalStatus(id: string, status: StudentApprovalStatus): Promise<StudentRegistration | null>;
 }

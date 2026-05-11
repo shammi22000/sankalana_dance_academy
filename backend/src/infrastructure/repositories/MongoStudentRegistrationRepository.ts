@@ -86,6 +86,17 @@ export class MongoStudentRegistrationRepository implements StudentRegistrationRe
     return this.toEntity(result);
   }
 
+  async updatePasswordHash(id: string, passwordHash: string): Promise<StudentRegistration | null> {
+    const collection = await this.database.collection<StudentRegistrationDocument>("studentRegistrations");
+    const result = await collection.findOneAndUpdate(
+      { id },
+      { $set: { passwordHash } },
+      { returnDocument: "after" },
+    );
+
+    return this.toEntity(result);
+  }
+
   async updateApprovalStatus(id: string, status: StudentApprovalStatus): Promise<StudentRegistration | null> {
     const collection = await this.database.collection<StudentRegistrationDocument>("studentRegistrations");
     const result = await collection.findOneAndUpdate(

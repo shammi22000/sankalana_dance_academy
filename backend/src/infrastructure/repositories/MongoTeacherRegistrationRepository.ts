@@ -76,6 +76,17 @@ export class MongoTeacherRegistrationRepository implements TeacherRegistrationRe
     return this.toEntity(result);
   }
 
+  async updatePasswordHash(id: string, passwordHash: string): Promise<TeacherRegistration | null> {
+    const collection = await this.database.collection<TeacherRegistrationDocument>("teacherRegistrations");
+    const result = await collection.findOneAndUpdate(
+      { id },
+      { $set: { passwordHash } },
+      { returnDocument: "after" },
+    );
+
+    return this.toEntity(result);
+  }
+
   private toEntity(document: TeacherRegistrationDocument | null): TeacherRegistration | null {
     if (!document) {
       return null;

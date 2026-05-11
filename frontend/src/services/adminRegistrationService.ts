@@ -14,6 +14,11 @@ export interface PendingRegistrations {
   teachers: TeacherRegistration[];
 }
 
+export interface PasswordUpdatePayload {
+  password: string;
+  confirmPassword: string;
+}
+
 function getAdminHeaders(): Record<string, string> {
   const storedSession = localStorage.getItem(adminSessionKey);
 
@@ -144,6 +149,30 @@ export async function updateStudentApprovalStatus(
   return result.data;
 }
 
+export async function updateStudentPassword(
+  id: string,
+  payload: PasswordUpdatePayload,
+): Promise<StudentRegistration> {
+  const response = await fetch(`${API_BASE_URL}/admin/student-registrations/${id}/password`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAdminHeaders(),
+    },
+    body: JSON.stringify(payload),
+  });
+  const result = (await response.json().catch(() => null)) as
+    | StudentRegistrationApiResponse<StudentRegistration>
+    | null;
+
+  if (!response.ok || !result?.success || !result.data) {
+    const details = result?.error?.details ? Object.values(result.error.details).join(" ") : "";
+    throw new Error(`${result?.error?.message ?? "Unable to update student password."} ${details}`.trim());
+  }
+
+  return result.data;
+}
+
 export async function updateTeacherApplicationStatus(
   id: string,
   status: TeacherApplicationStatus,
@@ -163,6 +192,30 @@ export async function updateTeacherApplicationStatus(
   if (!response.ok || !result?.success || !result.data) {
     const details = result?.error?.details ? Object.values(result.error.details).join(" ") : "";
     throw new Error(`${result?.error?.message ?? "Unable to update teacher registration."} ${details}`.trim());
+  }
+
+  return result.data;
+}
+
+export async function updateTeacherPassword(
+  id: string,
+  payload: PasswordUpdatePayload,
+): Promise<TeacherRegistration> {
+  const response = await fetch(`${API_BASE_URL}/admin/teacher-registrations/${id}/password`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAdminHeaders(),
+    },
+    body: JSON.stringify(payload),
+  });
+  const result = (await response.json().catch(() => null)) as
+    | StudentRegistrationApiResponse<TeacherRegistration>
+    | null;
+
+  if (!response.ok || !result?.success || !result.data) {
+    const details = result?.error?.details ? Object.values(result.error.details).join(" ") : "";
+    throw new Error(`${result?.error?.message ?? "Unable to update teacher password."} ${details}`.trim());
   }
 
   return result.data;

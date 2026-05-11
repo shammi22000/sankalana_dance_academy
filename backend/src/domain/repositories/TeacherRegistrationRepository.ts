@@ -8,4 +8,5 @@ export interface TeacherRegistrationRepository {
   findByUsername(username: string): Promise<TeacherRegistration | null>;
   findByApplicationStatus(status: TeacherApplicationStatus): Promise<TeacherRegistration[]>;
   updateApplicationStatus(id: string, status: TeacherApplicationStatus): Promise<TeacherRegistration | null>;
+  updatePasswordHash(id: string, passwordHash: string): Promise<TeacherRegistration | null>;
 }

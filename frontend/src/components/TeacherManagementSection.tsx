@@ -26,6 +26,7 @@ import {
   createTeacherRegistration,
   getTeacherRegistrations,
   updateTeacherApplicationStatus,
+  updateTeacherPassword,
 } from "../services/adminRegistrationService";
 import type { TeacherApplicationStatus, TeacherRegistration, TeacherRegistrationPayload, TeachingDay } from "../types/teacherRegistration";
 import { showErrorAlert, showSuccessAlert } from "../utils/alerts";
@@ -33,6 +34,7 @@ import { cn } from "../utils/cn";
 
 type DirectoryTeacher = {
   id: string;
+  displayId: string;
   name: string;
   email: string;
   phone: string;
@@ -117,7 +119,17 @@ export function TeacherManagementSection() {
   }, []);
 
   const directoryTeachers = useMemo(
-    () => teacherRegistrations.map(toDirectoryTeacher),
+    () => {
+      const displayIds = new Map(
+        [...teacherRegistrations]
+          .sort((first, second) => Date.parse(first.createdAt) - Date.parse(second.createdAt))
+          .map((teacher, index) => [teacher.id, String(index + 1)]),
+      );
+
+      return teacherRegistrations.map((teacher, index) =>
+        toDirectoryTeacher(teacher, index, displayIds.get(teacher.id) ?? String(index + 1)),
+      );
+    },
     [teacherRegistrations],
   );
 
@@ -131,7 +143,7 @@ export function TeacherManagementSection() {
           return true;
         }
 
-        return `${teacher.name} ${teacher.specialty} ${teacher.email} ${teacher.username} ${teacher.phone}`
+        return `${teacher.displayId} ${teacher.name} ${teacher.specialty} ${teacher.email} ${teacher.username} ${teacher.phone}`
           .toLowerCase()
           .includes(normalizedSearch);
       })
@@ -370,13 +382,14 @@ export function TeacherManagementSection() {
   );
 }
 
-function toDirectoryTeacher(teacher: TeacherRegistration, index: number): DirectoryTeacher {
+function toDirectoryTeacher(teacher: TeacherRegistration, index: number, displayId: string): DirectoryTeacher {
   const availabilityCount = teacher.availableDays.length;
   const specialty = teacher.danceStyles || "Dance Faculty";
   const applicationStatus = teacher.applicationStatus;
 
   return {
     id: teacher.id,
+    displayId,
     name: teacher.fullName,
     email: teacher.email,
     phone: teacher.phone,
@@ -488,13 +501,15 @@ function TeacherProfileModal({
   teacher: DirectoryTeacher;
   onClose: () => void;
 }) {
+  const [isPasswordEditing, setIsPasswordEditing] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const isActive = teacher.status === "approved";
   const profileGroups = [
     {
       title: "Account Details",
       icon: UserRound,
       details: [
-        { label: "Teacher ID", value: teacher.id },
+        { label: "Teacher ID", value: teacher.displayId },
         { label: "Full Name", value: teacher.name },
         { label: "Username", value: teacher.username },
         { label: "Role", value: teacher.accountRole },
@@ -529,6 +544,31 @@ function TeacherProfileModal({
       ],
     },
   ];
+
+  async function handlePasswordSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+
+    setIsUpdatingPassword(true);
+
+    try {
+      await updateTeacherPassword(teacher.id, {
+        password: String(formData.get("password") ?? ""),
+        confirmPassword: String(formData.get("confirmPassword") ?? ""),
+      });
+      form.reset();
+      setIsPasswordEditing(false);
+      await showSuccessAlert("Password Updated", `${teacher.name}'s login password has been changed.`);
+    } catch (error) {
+      await showErrorAlert(
+        "Password Not Updated",
+        error instanceof Error ? error.message : "Unable to update teacher password.",
+      );
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] overflow-y-auto bg-black px-4 py-6 sm:px-6">
@@ -630,6 +670,60 @@ function TeacherProfileModal({
               <p className="mt-4 rounded-xl border border-cyanGlow/20 bg-cyanGlow/8 px-4 py-3 text-sm font-semibold leading-6 text-white/66">
                 Admins can manage teacher access, but saved passwords are not exposed. Use a password reset/change flow when a teacher needs new login credentials.
               </p>
+
+              {isPasswordEditing ? (
+                <form className="mt-5 grid gap-4" onSubmit={handlePasswordSubmit}>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="grid gap-2">
+                      <span className={modalLabelClass}>New Password</span>
+                      <input
+                        className={modalInputClass}
+                        name="password"
+                        type="password"
+                        minLength={6}
+                        placeholder="New password"
+                        required
+                      />
+                    </label>
+                    <label className="grid gap-2">
+                      <span className={modalLabelClass}>Confirm Password</span>
+                      <input
+                        className={modalInputClass}
+                        name="confirmPassword"
+                        type="password"
+                        minLength={6}
+                        placeholder="Confirm password"
+                        required
+                      />
+                    </label>
+                  </div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setIsPasswordEditing(false)}
+                      disabled={isUpdatingPassword}
+                      className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/12 px-5 text-sm font-black text-white/70 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isUpdatingPassword}
+                      className="inline-flex min-h-11 items-center justify-center rounded-xl bg-cyanGlow px-5 text-sm font-black text-[#061014] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {isUpdatingPassword ? "Updating..." : "Save Password"}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsPasswordEditing(true)}
+                  className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-cyanGlow/35 px-5 text-sm font-black text-cyanGlow transition hover:bg-cyanGlow/10"
+                >
+                  Set New Password
+                </button>
+              )}
             </section>
 
             <section className="rounded-2xl border border-white/10 p-5" style={{ backgroundColor: modalPanelColor }}>

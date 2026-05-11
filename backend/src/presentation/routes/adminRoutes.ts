@@ -30,7 +30,9 @@ export function createAdminRoutes(
   router.post("/teacher-registrations", adminRegistrationController.createTeacherRegistration);
   router.get("/teacher-registrations", adminRegistrationController.listTeacherRegistrations);
   router.patch("/student-registrations/:id", adminRegistrationController.updateStudentProfile);
+  router.patch("/student-registrations/:id/password", adminRegistrationController.updateStudentPassword);
   router.patch("/student-registrations/:id/approval", adminRegistrationController.updateStudentApprovalStatus);
+  router.patch("/teacher-registrations/:id/password", adminRegistrationController.updateTeacherPassword);
   router.patch("/teacher-registrations/:id/approval", adminRegistrationController.updateTeacherApplicationStatus);
 
   return router;

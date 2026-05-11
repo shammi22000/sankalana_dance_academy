@@ -96,11 +96,43 @@ export class AdminRegistrationController {
     }
   };
 
+  updateStudentPassword = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      const student = await this.manageRegistrationApprovalsUseCase.updateStudentPassword(
+        request.params.id,
+        request.body,
+      );
+
+      response.status(200).json({
+        success: true,
+        data: student,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   updateTeacherApplicationStatus = async (request: Request, response: Response, next: NextFunction) => {
     try {
       const teacher = await this.manageRegistrationApprovalsUseCase.updateTeacherStatus(
         request.params.id,
         request.body.status,
+      );
+
+      response.status(200).json({
+        success: true,
+        data: teacher,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  updateTeacherPassword = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      const teacher = await this.manageRegistrationApprovalsUseCase.updateTeacherPassword(
+        request.params.id,
+        request.body,
       );
 
       response.status(200).json({
