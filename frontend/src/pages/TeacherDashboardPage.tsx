@@ -30,7 +30,7 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Navigate, useNavigate } from "react-router-dom";
 import { danceImages } from "../assets/danceImages";
@@ -42,6 +42,8 @@ import { cn } from "../utils/cn";
 const sessionStorageKey = "sankalanaTeacherSession";
 const attendanceStorageKey = "sankalanaTeacherAttendanceRecords";
 const createdClassesStorageKey = "sankalanaTeacherCreatedClasses";
+const submittedEnrolmentStorageKey = "sankalanaStudentEnrolmentSubmitted";
+const submittedEnrolmentApplicationsStorageKey = "sankalanaStudentEnrolmentApplications";
 
 type AttendanceStatus = "present" | "absent" | "late";
 
@@ -61,8 +63,53 @@ type AttendanceRecord = {
   remarks: string;
 };
 
+type TeacherReviewStatus = "Pending Review" | "Approved" | "Rejected";
+
+type TeacherReviewEnrolmentData = {
+  danceStyleId: string;
+  slotId: string;
+  teacherId: string;
+  personal: {
+    fullName: string;
+    dateOfBirth: string;
+    gender: string;
+    phone: string;
+    email: string;
+    address: string;
+    city: string;
+    emergencyContact: string;
+  };
+  guardian: {
+    fullName: string;
+    phone: string;
+    email: string;
+    relationship: string;
+    address: string;
+    under18: "Yes" | "No";
+  };
+  confirmed: boolean;
+};
+
+type TeacherReviewApplication = {
+  applicationId: string;
+  status: TeacherReviewStatus;
+  submittedAt: string;
+  adminComment?: string;
+  reviewedAt?: string;
+  reviewedByTeacherId?: string;
+  data: TeacherReviewEnrolmentData;
+};
+
 type CreatedTeacherClass = {
   id: string;
+  teacherId?: string;
+  teacherName?: string;
+  teacherUsername?: string;
+  teacherSpecialization?: string;
+  teacherExperienceYears?: number;
+  teacherBiography?: string;
+  teacherAvatarFileName?: string;
+  teacherAvatarImageDataUrl?: string;
   className: string;
   danceStyle: string;
   classLevel: string;
@@ -77,7 +124,19 @@ type CreatedTeacherClass = {
   createdAt: string;
 };
 
-type NewTeacherClassPayload = Omit<CreatedTeacherClass, "id" | "createdAt">;
+type NewTeacherClassPayload = Omit<
+  CreatedTeacherClass,
+  | "id"
+  | "createdAt"
+  | "teacherId"
+  | "teacherName"
+  | "teacherUsername"
+  | "teacherSpecialization"
+  | "teacherExperienceYears"
+  | "teacherBiography"
+  | "teacherAvatarFileName"
+  | "teacherAvatarImageDataUrl"
+>;
 
 const attendanceClasses = [
   { id: "advanced-contemporary-jazz", name: "Advanced Contemporary Jazz", level: "Advanced", enrolled: 8 },
@@ -239,6 +298,107 @@ function readCreatedClasses(): CreatedTeacherClass[] {
   }
 }
 
+function getTeacherClassOwner(teacher: TeacherAuthentication["teacher"]) {
+  return {
+    teacherId: teacher.id,
+    teacherName: teacher.fullName,
+    teacherUsername: teacher.username,
+    teacherSpecialization: teacher.danceStyles,
+    teacherExperienceYears: teacher.experienceYears,
+    teacherBiography: teacher.biography,
+    teacherAvatarFileName: teacher.avatarFileName,
+    teacherAvatarImageDataUrl: teacher.avatarImageDataUrl,
+  };
+}
+
+function isClassOwnedByTeacher(classItem: CreatedTeacherClass, teacher: TeacherAuthentication["teacher"]) {
+  if (classItem.teacherId) {
+    return classItem.teacherId === teacher.id;
+  }
+
+  return classItem.danceStyle === teacher.danceStyles;
+}
+
+function readTeacherReviewApplications(): TeacherReviewApplication[] {
+  const applications: TeacherReviewApplication[] = [];
+  const storedApplications = localStorage.getItem(submittedEnrolmentApplicationsStorageKey);
+
+  if (storedApplications) {
+    try {
+      const parsedApplications = JSON.parse(storedApplications) as TeacherReviewApplication[];
+
+      if (Array.isArray(parsedApplications)) {
+        applications.push(...parsedApplications.filter((application) => application.applicationId));
+      }
+    } catch {
+      localStorage.removeItem(submittedEnrolmentApplicationsStorageKey);
+    }
+  }
+
+  const storedApplication = localStorage.getItem(submittedEnrolmentStorageKey);
+
+  if (storedApplication) {
+    try {
+      const application = JSON.parse(storedApplication) as TeacherReviewApplication;
+
+      if (
+        application?.applicationId &&
+        !applications.some((currentApplication) => currentApplication.applicationId === application.applicationId)
+      ) {
+        applications.push(application);
+      }
+    } catch {
+      localStorage.removeItem(submittedEnrolmentStorageKey);
+    }
+  }
+
+  return applications.sort(
+    (first, second) => new Date(second.submittedAt).getTime() - new Date(first.submittedAt).getTime(),
+  );
+}
+
+function persistTeacherReviewApplications(applications: TeacherReviewApplication[]) {
+  const sortedApplications = [...applications].sort(
+    (first, second) => new Date(second.submittedAt).getTime() - new Date(first.submittedAt).getTime(),
+  );
+  const currentSingleApplication = localStorage.getItem(submittedEnrolmentStorageKey);
+
+  localStorage.setItem(submittedEnrolmentApplicationsStorageKey, JSON.stringify(sortedApplications));
+
+  if (!currentSingleApplication) {
+    return;
+  }
+
+  try {
+    const singleApplication = JSON.parse(currentSingleApplication) as TeacherReviewApplication;
+    const updatedSingleApplication = sortedApplications.find(
+      (application) => application.applicationId === singleApplication.applicationId,
+    );
+
+    if (updatedSingleApplication) {
+      localStorage.setItem(submittedEnrolmentStorageKey, JSON.stringify(updatedSingleApplication));
+    }
+  } catch {
+    localStorage.removeItem(submittedEnrolmentStorageKey);
+  }
+}
+
+function getApplicationsForTeacher(teacher: TeacherAuthentication["teacher"]) {
+  return readTeacherReviewApplications().filter((application) => application.data.teacherId === teacher.id);
+}
+
+function getClassForApplication(application: TeacherReviewApplication) {
+  return readCreatedClasses().find((classItem) => classItem.id === application.data.slotId);
+}
+
+function formatClassSchedule(classItem?: CreatedTeacherClass) {
+  if (!classItem) {
+    return "Class schedule not found";
+  }
+
+  return `${classItem.days.join(", ") || "Flexible"} • ${classItem.startTime} - ${classItem.endTime}`;
+}
+
 function getStatusLabel(status: AttendanceStatus) {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
@@ -288,6 +448,7 @@ export function TeacherDashboardPage() {
     { label: "Dashboard", icon: Grid2X2 },
     { label: "My Info", icon: UserRound },
     { label: "My Classes", icon: Sparkles },
+    { label: "Enrol Requests", icon: BadgeCheck },
     { label: "Attendance", icon: ClipboardCheck },
     { label: "Schedule", icon: CalendarDays },
     { label: "Performances", icon: Theater },
@@ -510,6 +671,8 @@ export function TeacherDashboardPage() {
               teacher={teacher}
               onMarkAttendance={() => setActiveSection("Attendance")}
             />
+          ) : activeSection === "Enrol Requests" ? (
+            <TeacherEnrolmentRequestsSection teacher={teacher} />
           ) : activeSection === "Attendance" ? (
             <TeacherAttendanceSection />
           ) : (
@@ -681,6 +844,217 @@ export function TeacherDashboardPage() {
   );
 }
 
+function TeacherEnrolmentRequestsSection({
+  teacher,
+}: {
+  teacher: TeacherAuthentication["teacher"];
+}) {
+  const [applications, setApplications] = useState<TeacherReviewApplication[]>(() => getApplicationsForTeacher(teacher));
+  const pendingCount = applications.filter((application) => application.status === "Pending Review").length;
+  const approvedCount = applications.filter((application) => application.status === "Approved").length;
+  const rejectedCount = applications.filter((application) => application.status === "Rejected").length;
+
+  async function handleDecision(application: TeacherReviewApplication, status: Exclude<TeacherReviewStatus, "Pending Review">) {
+    const approving = status === "Approved";
+    const result = await showConfirmAlert(
+      approving ? "Accept Enrolment" : "Reject Enrolment",
+      `${approving ? "Accept" : "Reject"} ${application.data.personal.fullName}'s enrolment request?`,
+      approving ? "Accept" : "Reject",
+    );
+
+    if (!result.isConfirmed) {
+      return;
+    }
+
+    const updatedApplications = readTeacherReviewApplications().map((currentApplication) =>
+      currentApplication.applicationId === application.applicationId
+        ? {
+            ...currentApplication,
+            status,
+            reviewedAt: new Date().toISOString(),
+            reviewedByTeacherId: teacher.id,
+            adminComment: approving
+              ? `Accepted by ${teacher.fullName}.`
+              : `Rejected by ${teacher.fullName}. Please contact the academy for another suitable class.`,
+          }
+        : currentApplication,
+    );
+
+    persistTeacherReviewApplications(updatedApplications);
+    setApplications(updatedApplications.filter((currentApplication) => currentApplication.data.teacherId === teacher.id));
+    await showSuccessAlert(
+      approving ? "Enrolment Accepted" : "Enrolment Rejected",
+      `${application.data.personal.fullName}'s request has been ${approving ? "accepted" : "rejected"}.`,
+    );
+  }
+
+  return (
+    <section className="relative z-10 mx-auto max-w-7xl pb-10">
+      <div className="flex flex-col gap-7 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-cyanGlow">Student Enrolments</p>
+          <h1 className="mt-4 text-5xl font-black leading-none text-[#f4e7fb] sm:text-6xl">Enrol Requests</h1>
+          <p className="mt-5 max-w-3xl text-xl font-semibold leading-9 text-white/[0.62]">
+            Review students who selected your class during enrolment. Accept or reject each request from here.
+          </p>
+        </div>
+
+        <span className="inline-flex w-fit items-center gap-3 rounded-full border border-cyanGlow/35 bg-cyanGlow/10 px-6 py-4 text-sm font-black uppercase tracking-[0.12em] text-cyanGlow">
+          <BadgeCheck size={20} />
+          {pendingCount} Pending
+        </span>
+      </div>
+
+      <div className="mt-10 grid gap-5 md:grid-cols-3">
+        <ClassMetric icon={BadgeCheck} label="Pending Review" value={String(pendingCount)} detail="Waiting for your decision" />
+        <ClassMetric icon={CheckCircle2} label="Accepted" value={String(approvedCount)} detail="Students approved" />
+        <ClassMetric icon={XCircle} label="Rejected" value={String(rejectedCount)} detail="Requests declined" />
+      </div>
+
+      {applications.length === 0 ? (
+        <article className="mt-10 overflow-hidden rounded-[2rem] border border-white/[0.12] bg-white/[0.055] shadow-[0_32px_110px_rgba(0,0,0,0.36)] backdrop-blur-xl">
+          <div className="grid gap-8 p-7 lg:grid-cols-[1fr_24rem] lg:p-10">
+            <div className="flex flex-col justify-center">
+              <span className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-cyanGlow/18 text-cyanGlow shadow-[0_18px_45px_rgba(34,211,238,0.16)]">
+                <BadgeCheck size={31} />
+              </span>
+              <h2 className="mt-7 text-4xl font-black leading-tight text-[#f4e7fb]">No enrolment requests yet</h2>
+              <p className="mt-4 max-w-2xl text-base font-semibold leading-8 text-white/62">
+                Requests will appear here when students choose one of your created classes during the student enrolment flow.
+              </p>
+            </div>
+            <div className="relative min-h-72 overflow-hidden rounded-[1.5rem] border border-cyanGlow/18">
+              <img src={danceImages.heroCarousel[1].src} alt="" className="absolute inset-0 h-full w-full object-cover opacity-72" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#17091d] via-[#17091d]/25 to-transparent" />
+              <div className="absolute bottom-6 left-6 right-6">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-cyanGlow">Class Requests</p>
+                <p className="mt-2 text-2xl font-black text-white">Student choices arrive after enrolment submission.</p>
+              </div>
+            </div>
+          </div>
+        </article>
+      ) : (
+        <div className="mt-10 grid gap-6">
+          {applications.map((application) => {
+            const classItem = getClassForApplication(application);
+            const pending = application.status === "Pending Review";
+
+            return (
+              <article
+                key={application.applicationId}
+                className={cn(
+                  "overflow-hidden rounded-[1.5rem] border bg-[#17091d]/92 shadow-[0_24px_90px_rgba(0,0,0,0.28)]",
+                  pending ? "border-[#f0b7ff]/28" : "border-white/[0.12]",
+                )}
+              >
+                <div className="grid gap-0 xl:grid-cols-[1fr_20rem]">
+                  <div className="p-6 sm:p-7">
+                    <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <TeacherRequestStatusBadge status={application.status} />
+                          <span className="rounded-full border border-white/10 bg-white/[0.055] px-4 py-2 text-xs font-black uppercase tracking-[0.12em] text-white/52">
+                            {application.applicationId}
+                          </span>
+                        </div>
+                        <h2 className="mt-5 text-3xl font-black text-[#f4e7fb]">
+                          {application.data.personal.fullName}
+                        </h2>
+                        <p className="mt-2 text-sm font-semibold text-white/56">
+                          Submitted {formatClassDate(application.submittedAt)}
+                        </p>
+                      </div>
+
+                      {pending && (
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                          <button
+                            type="button"
+                            onClick={() => handleDecision(application, "Approved")}
+                            className="inline-flex min-h-12 items-center justify-center gap-3 rounded-xl bg-cyanGlow px-5 text-sm font-black text-ink transition hover:-translate-y-0.5"
+                          >
+                            <CheckCircle2 size={19} />
+                            Accept
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDecision(application, "Rejected")}
+                            className="inline-flex min-h-12 items-center justify-center gap-3 rounded-xl border border-[#ff7aa8]/55 px-5 text-sm font-black text-[#ffb0c8] transition hover:bg-[#ff7aa8]/10"
+                          >
+                            <XCircle size={19} />
+                            Reject
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-7 grid gap-4 lg:grid-cols-3">
+                      <TeacherRequestInfo label="Class" value={classItem?.className ?? "Class not found"} />
+                      <TeacherRequestInfo label="Schedule" value={formatClassSchedule(classItem)} />
+                      <TeacherRequestInfo label="Level / Seats" value={classItem ? `${classItem.classLevel} • ${classItem.capacity} seats` : "Not available"} />
+                    </div>
+
+                    <div className="mt-5 grid gap-4 lg:grid-cols-3">
+                      <TeacherRequestInfo label="Student Phone" value={application.data.personal.phone} />
+                      <TeacherRequestInfo label="Student Email" value={application.data.personal.email} />
+                      <TeacherRequestInfo label="Guardian" value={`${application.data.guardian.fullName} • ${application.data.guardian.phone}`} />
+                    </div>
+
+                    {application.adminComment && (
+                      <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.055] p-4">
+                        <p className="text-xs font-black uppercase tracking-[0.12em] text-white/42">Decision Note</p>
+                        <p className="mt-2 text-sm font-semibold leading-6 text-white/68">{application.adminComment}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <aside className="relative min-h-72 overflow-hidden border-t border-white/10 xl:border-l xl:border-t-0">
+                    <img src={teacher.avatarImageDataUrl || danceImages.heroCarousel[0].src} alt="" className="absolute inset-0 h-full w-full object-cover opacity-64" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#17091d] via-[#17091d]/48 to-transparent" />
+                    <div className="absolute bottom-6 left-6 right-6">
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-cyanGlow">{teacher.danceStyles}</p>
+                      <p className="mt-2 text-2xl font-black text-white">{teacher.fullName}</p>
+                    </div>
+                  </aside>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TeacherRequestStatusBadge({ status }: { status: TeacherReviewStatus }) {
+  const approved = status === "Approved";
+  const rejected = status === "Rejected";
+
+  return (
+    <span
+      className={cn(
+        "inline-flex w-fit items-center gap-2 rounded-full border px-4 py-2 text-xs font-black uppercase tracking-[0.1em]",
+        approved
+          ? "border-cyanGlow/45 bg-cyanGlow/14 text-cyanGlow"
+          : rejected
+            ? "border-[#ff7aa8]/45 bg-[#ff7aa8]/12 text-[#ffb0c8]"
+            : "border-[#f0b7ff]/35 bg-[#f0b7ff]/12 text-[#f0b7ff]",
+      )}
+    >
+      {rejected ? <XCircle size={15} /> : <BadgeCheck size={15} />}
+      {status}
+    </span>
+  );
+}
+
+function TeacherRequestInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.055] p-4">
+      <p className="text-xs font-black uppercase tracking-[0.12em] text-white/42">{label}</p>
+      <p className="mt-2 break-words text-sm font-black text-white/82">{value}</p>
+    </div>
+  );
+}
+
 function TeacherClassesSection({
   teacher,
 }: {
@@ -689,22 +1063,47 @@ function TeacherClassesSection({
 }) {
   const teacherDanceStyle = teacher.danceStyles || "Dance Faculty";
   const defaultDays = teacher.availableDays.length > 0 ? teacher.availableDays.slice(0, 2) : ["Tue", "Thu"];
-  const [createdClasses, setCreatedClasses] = useState<CreatedTeacherClass[]>(() => readCreatedClasses());
+  const [createdClasses, setCreatedClasses] = useState<CreatedTeacherClass[]>(() =>
+    readCreatedClasses().filter((classItem) => isClassOwnedByTeacher(classItem, teacher)),
+  );
   const [isAddClassOpen, setIsAddClassOpen] = useState(false);
   const [editingClass, setEditingClass] = useState<CreatedTeacherClass | null>(null);
   const totalCapacity = createdClasses.reduce((total, classItem) => total + classItem.capacity, 0);
   const weeklySessions = createdClasses.reduce((total, classItem) => total + classItem.days.length, 0);
 
+  useEffect(() => {
+    const legacyTeacherClasses = createdClasses.filter((classItem) => !classItem.teacherId);
+
+    if (legacyTeacherClasses.length === 0) {
+      return;
+    }
+
+    const owner = getTeacherClassOwner(teacher);
+    const legacyClassIds = new Set(legacyTeacherClasses.map((classItem) => classItem.id));
+    const nextAllClasses = readCreatedClasses().map((classItem) =>
+      legacyClassIds.has(classItem.id) ? { ...classItem, ...owner } : classItem,
+    );
+    const nextTeacherClasses = createdClasses.map((classItem) =>
+      legacyClassIds.has(classItem.id) ? { ...classItem, ...owner } : classItem,
+    );
+
+    localStorage.setItem(createdClassesStorageKey, JSON.stringify(nextAllClasses));
+    setCreatedClasses(nextTeacherClasses);
+  }, [createdClasses, teacher]);
+
   async function handleCreateClass(payload: NewTeacherClassPayload) {
     const classPayload: CreatedTeacherClass = {
       id: `CLS-${Date.now()}`,
+      ...getTeacherClassOwner(teacher),
       ...payload,
       createdAt: new Date().toISOString(),
     };
+    const allClasses = readCreatedClasses();
+    const nextAllClasses = [classPayload, ...allClasses];
     const nextClasses = [classPayload, ...createdClasses];
 
     setCreatedClasses(nextClasses);
-    localStorage.setItem(createdClassesStorageKey, JSON.stringify(nextClasses));
+    localStorage.setItem(createdClassesStorageKey, JSON.stringify(nextAllClasses));
     setIsAddClassOpen(false);
     await showSuccessAlert("Class Saved", `${classPayload.className} has been saved.`);
   }
@@ -716,14 +1115,18 @@ function TeacherClassesSection({
 
     const updatedClass: CreatedTeacherClass = {
       ...editingClass,
+      ...getTeacherClassOwner(teacher),
       ...payload,
     };
+    const nextAllClasses = readCreatedClasses().map((classItem) =>
+      classItem.id === editingClass.id ? updatedClass : classItem,
+    );
     const nextClasses = createdClasses.map((classItem) =>
       classItem.id === editingClass.id ? updatedClass : classItem,
     );
 
     setCreatedClasses(nextClasses);
-    localStorage.setItem(createdClassesStorageKey, JSON.stringify(nextClasses));
+    localStorage.setItem(createdClassesStorageKey, JSON.stringify(nextAllClasses));
     setEditingClass(null);
     await showSuccessAlert("Class Updated", `${updatedClass.className} has been updated.`);
   }
@@ -740,9 +1143,10 @@ function TeacherClassesSection({
     }
 
     const nextClasses = createdClasses.filter((currentClass) => currentClass.id !== classItem.id);
+    const nextAllClasses = readCreatedClasses().filter((currentClass) => currentClass.id !== classItem.id);
 
     setCreatedClasses(nextClasses);
-    localStorage.setItem(createdClassesStorageKey, JSON.stringify(nextClasses));
+    localStorage.setItem(createdClassesStorageKey, JSON.stringify(nextAllClasses));
     await showSuccessAlert("Class Deleted", `${classItem.className} has been removed.`);
   }
 

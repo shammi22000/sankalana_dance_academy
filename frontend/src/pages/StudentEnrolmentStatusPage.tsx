@@ -28,8 +28,8 @@ import {
 
 const timelineItems = [
   { title: "Enrolment Submitted", detail: "Application received", icon: CheckCircle2 },
-  { title: "Admin Reviewing", detail: "Currently active", icon: Hourglass },
-  { title: "Teacher Confirmation", detail: "Class placement", icon: UserRound },
+  { title: "Teacher Reviewing", detail: "Currently active", icon: Hourglass },
+  { title: "Class Confirmation", detail: "Class placement", icon: UserRound },
   { title: "Final Decision", detail: "Academy decision", icon: Flag },
 ];
 
@@ -98,16 +98,16 @@ export function StudentEnrolmentStatusPage() {
             <div className="mt-8 grid gap-6 sm:grid-cols-2">
               <SummaryStat label="Dance Style" value={selectedStyle?.name ?? "Not selected"} />
               <SummaryStat label="Instructor" value={selectedTeacher?.name ?? "Not selected"} />
-              <SummaryStat label="Preferred Time" value={selectedSlot ? `${selectedSlot.day} • ${selectedSlot.time}` : "Not selected"} />
+              <SummaryStat label="Preferred Time" value={selectedSlot ? `${selectedSlot.className} • ${selectedSlot.day} • ${selectedSlot.time}` : "Not selected"} />
               <SummaryStat label="Submitted On" value={formatDate(application.submittedAt)} />
             </div>
 
             <div className="mt-8 rounded-2xl border border-white/10 bg-[#0b0310] p-5">
               <h3 className="text-xl font-black text-[#f4e7fb]">Current Status</h3>
               <p className="mt-3 text-sm font-semibold leading-7 text-white/68">
-                {isPending && "Your enrolment is currently being reviewed by the academy admin."}
-                {isApproved && "Congratulations! Your enrolment has been approved."}
-                {isRejected && "Your enrolment could not be approved."}
+                {isPending && "Your enrolment is currently being reviewed by the selected teacher."}
+                {isApproved && "Congratulations! Your enrolment has been accepted by the teacher."}
+                {isRejected && "Your enrolment could not be accepted for this class."}
               </p>
             </div>
           </article>
@@ -131,7 +131,7 @@ export function StudentEnrolmentStatusPage() {
             <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <SummaryStat label="Dance Style" value={selectedStyle?.name ?? "Not selected"} />
               <SummaryStat label="Teacher" value={selectedTeacher?.name ?? "Not selected"} />
-              <SummaryStat label="Date" value={selectedSlot?.day ?? "Not selected"} />
+              <SummaryStat label="Date" value={selectedSlot ? `${selectedSlot.day} • ${selectedSlot.time}` : "Not selected"} />
               <SummaryStat label="Class Level" value={selectedSlot?.level ?? "Not selected"} />
             </div>
           </article>

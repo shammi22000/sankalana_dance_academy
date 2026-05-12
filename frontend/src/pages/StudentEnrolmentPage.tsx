@@ -8,18 +8,13 @@ import {
   Clock3,
   Edit3,
   Heart,
-  Landmark,
   Mail,
   MapPin,
-  Music2,
   Phone,
-  Plus,
   Save,
   Sparkles,
   UserRound,
   UsersRound,
-  WandSparkles,
-  Waves,
   type LucideIcon,
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
@@ -61,6 +56,8 @@ type SubmittedEnrolment = {
   status: "Pending Review" | "Approved" | "Rejected";
   submittedAt: string;
   adminComment?: string;
+  reviewedAt?: string;
+  reviewedByTeacherId?: string;
   data: EnrolmentData;
 };
 
@@ -68,7 +65,9 @@ type ValidationErrors = Record<string, string>;
 
 const draftStorageKey = "sankalanaStudentEnrolmentDraft";
 const submittedStorageKey = "sankalanaStudentEnrolmentSubmitted";
+const submittedApplicationsStorageKey = "sankalanaStudentEnrolmentApplications";
 const studentSessionStorageKey = "sankalanaStudentSession";
+const teacherCreatedClassesStorageKey = "sankalanaTeacherCreatedClasses";
 
 const emptyEnrolment: EnrolmentData = {
   danceStyleId: "",
@@ -107,126 +106,252 @@ const steps = [
 const danceStyles = [
   {
     id: "kandyan",
-    name: "Kandyan Dance",
-    icon: Landmark,
+    name: "Kandyan Dancing",
+    image: danceImages.disciplines[0],
+    badge: "Classical Heritage",
+    focus: "Posture • Rhythm • Drum patterns",
     tone: "orchid",
     description: "A rhythmic Sri Lankan classical style with graceful footwork and powerful drum-led movement.",
   },
   {
-    id: "bharatanatyam",
-    name: "Bharatanatyam",
-    icon: WandSparkles,
+    id: "low-country",
+    name: "Low Country Dancing",
+    image: danceImages.disciplines[1],
+    badge: "Southern Tradition",
+    focus: "Expression • Masks • Grounded movement",
     tone: "cyan",
-    description: "A classical Indian dance form focused on expression, storytelling, posture, and precision.",
+    description: "A vibrant southern Sri Lankan dance tradition with expressive masks, grounded rhythm, and ritual movement.",
   },
   {
-    id: "hip-hop",
-    name: "Hip Hop",
-    icon: Music2,
+    id: "sabaragamu",
+    name: "Sabaragamu",
+    image: danceImages.disciplines[2],
+    badge: "Cultural Technique",
+    focus: "Handwork • Grace • Storytelling",
     tone: "pink",
-    description: "High-energy urban choreography with rhythm, groove, popping, locking, and freestyle movement.",
-  },
-  {
-    id: "ballet",
-    name: "Ballet",
-    icon: Sparkles,
-    tone: "orchid",
-    description: "A foundation of balance, discipline, elegance, posture, and refined stage technique.",
+    description: "A graceful Sri Lankan classical form known for elegant hand gestures, rhythm, and cultural storytelling.",
   },
   {
     id: "contemporary",
     name: "Contemporary",
-    icon: Waves,
+    image: danceImages.disciplines[3],
+    badge: "Modern Movement",
+    focus: "Flow • Release • Creative expression",
     tone: "cyan",
     description: "A fluid modern style exploring emotion, release, floor work, and expressive movement.",
   },
-  {
-    id: "other",
-    name: "Other",
-    icon: Plus,
-    tone: "pink",
-    description: "Ask about workshops, fusion classes, private coaching, or seasonal academy programs.",
-  },
 ];
 
-const classSlots = [
-  {
-    id: "mon-1600",
-    day: "Monday",
-    time: "4:00 PM - 5:30 PM",
-    seats: 3,
-    level: "Beginner",
-    studio: "Studio A",
-  },
-  {
-    id: "wed-1700",
-    day: "Wednesday",
-    time: "5:00 PM - 6:30 PM",
-    seats: 12,
-    level: "Intermediate",
-    studio: "Grand Hall",
-  },
-  {
-    id: "sat-0900",
-    day: "Saturday",
-    time: "9:00 AM - 10:30 AM",
-    seats: 8,
-    level: "Advanced",
-    studio: "Studio C",
-  },
-  {
-    id: "sun-1000",
-    day: "Sunday",
-    time: "10:00 AM - 11:30 AM",
-    seats: 10,
-    level: "Beginner",
-    studio: "Studio B",
-  },
-];
+type StoredTeacherClass = {
+  id: string;
+  teacherId?: string;
+  teacherName?: string;
+  teacherUsername?: string;
+  teacherSpecialization?: string;
+  teacherExperienceYears?: number;
+  teacherBiography?: string;
+  teacherAvatarFileName?: string;
+  teacherAvatarImageDataUrl?: string;
+  className: string;
+  danceStyle: string;
+  classLevel: string;
+  description: string;
+  days: string[];
+  startTime: string;
+  endTime: string;
+  studio: string;
+  capacity: number;
+  posterFileName: string;
+  milestones: string[];
+  createdAt: string;
+};
 
-const teachers = [
-  {
-    id: "anjali",
-    name: "Ms. Anjali Perera",
-    specialization: "Kandyan Dance",
-    experience: "8 years experience",
-    students: "320+",
-    time: "Monday 4:00 PM",
-    image: danceImages.story[0],
-    bio: "A graceful classical instructor focused on posture, rhythm, and confident stage presence.",
-  },
-  {
-    id: "kavindu",
-    name: "Mr. Kavindu Silva",
-    specialization: "Hip Hop",
-    experience: "5 years experience",
-    students: "180+",
-    time: "Wednesday 5:00 PM",
-    image: danceImages.story[1],
-    bio: "Brings high-energy urban choreography with a friendly beginner-focused teaching style.",
-  },
-  {
-    id: "nethmi",
-    name: "Ms. Nethmi Fernando",
-    specialization: "Ballet",
-    experience: "6 years experience",
-    students: "240+",
-    time: "Saturday 9:00 AM",
-    image: danceImages.story[2],
-    bio: "Builds disciplined technique, balance, and expressive performance habits for young dancers.",
-  },
-];
+type EnrolmentClassSlot = {
+  id: string;
+  danceStyleId: string;
+  teacherId: string;
+  className: string;
+  day: string;
+  days: string[];
+  time: string;
+  seats: number;
+  level: string;
+  studio: string;
+  description: string;
+  createdAt: string;
+};
+
+type EnrolmentTeacher = {
+  id: string;
+  name: string;
+  danceStyleId: string;
+  specialization: string;
+  experience: string;
+  students: string;
+  time: string;
+  image: string;
+  bio: string;
+  availableSeats: number;
+};
+
+const dayNameMap: Record<string, string> = {
+  Mon: "Monday",
+  Tue: "Tuesday",
+  Wed: "Wednesday",
+  Thu: "Thursday",
+  Fri: "Friday",
+  Sat: "Saturday",
+  Sun: "Sunday",
+};
+
+function normalizeLookupText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function resolveDanceStyleId(value: string) {
+  const normalizedValue = normalizeLookupText(value);
+
+  return danceStyles.find((style) => {
+    const normalizedStyleName = normalizeLookupText(style.name);
+
+    return normalizedValue === normalizedStyleName || normalizedValue.includes(normalizedStyleName);
+  })?.id;
+}
+
+function formatClassTime(value = "") {
+  const [hourValue, minuteValue] = value.split(":").map(Number);
+
+  if (Number.isNaN(hourValue) || Number.isNaN(minuteValue)) {
+    return value;
+  }
+
+  const period = hourValue >= 12 ? "PM" : "AM";
+  const hour = hourValue % 12 || 12;
+
+  return `${hour}:${String(minuteValue).padStart(2, "0")} ${period}`;
+}
+
+function formatClassDays(days: string[]) {
+  const cleanDays = days.filter(Boolean);
+
+  if (cleanDays.length === 0) {
+    return "Flexible";
+  }
+
+  return cleanDays.map((day) => dayNameMap[day] ?? day).join(", ");
+}
+
+function readCreatedTeacherClasses(): StoredTeacherClass[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  const storedClasses = window.localStorage.getItem(teacherCreatedClassesStorageKey);
+
+  if (!storedClasses) {
+    return [];
+  }
+
+  try {
+    const parsedClasses = JSON.parse(storedClasses) as StoredTeacherClass[];
+
+    return Array.isArray(parsedClasses)
+      ? parsedClasses.filter((classItem) => classItem.id && classItem.className && classItem.danceStyle)
+      : [];
+  } catch {
+    window.localStorage.removeItem(teacherCreatedClassesStorageKey);
+    return [];
+  }
+}
+
+function getTeacherIdForClass(classItem: StoredTeacherClass, danceStyleId: string) {
+  if (classItem.teacherId) {
+    return classItem.teacherId;
+  }
+
+  const fallbackName = classItem.teacherName ?? classItem.teacherUsername ?? classItem.teacherSpecialization ?? classItem.danceStyle;
+
+  return `${danceStyleId}-${normalizeLookupText(fallbackName) || classItem.id}`;
+}
+
+function getAvailableClassSlots(): EnrolmentClassSlot[] {
+  return readCreatedTeacherClasses().flatMap((classItem) => {
+    const danceStyleId = resolveDanceStyleId(classItem.danceStyle);
+
+    if (!danceStyleId) {
+      return [];
+    }
+
+    const classDays = Array.isArray(classItem.days) ? classItem.days : [];
+    const startTime = formatClassTime(classItem.startTime);
+    const endTime = formatClassTime(classItem.endTime);
+    const capacity = Number(classItem.capacity) || 0;
+
+    return [{
+      id: classItem.id,
+      danceStyleId,
+      teacherId: getTeacherIdForClass(classItem, danceStyleId),
+      className: classItem.className,
+      day: formatClassDays(classDays),
+      days: classDays.length > 0 ? classDays : ["Flexible"],
+      time: `${startTime} - ${endTime}`,
+      seats: capacity,
+      level: classItem.classLevel,
+      studio: classItem.studio,
+      description: classItem.description,
+      createdAt: classItem.createdAt,
+    }];
+  });
+}
+
+function getAvailableTeachers(): EnrolmentTeacher[] {
+  const teacherMap = new Map<string, EnrolmentTeacher>();
+
+  readCreatedTeacherClasses().forEach((classItem, index) => {
+    const danceStyleId = resolveDanceStyleId(classItem.danceStyle);
+
+    if (!danceStyleId) {
+      return;
+    }
+
+    const teacherId = getTeacherIdForClass(classItem, danceStyleId);
+    const existingTeacher = teacherMap.get(teacherId);
+    const classDays = Array.isArray(classItem.days) ? classItem.days : [];
+    const capacity = Number(classItem.capacity) || 0;
+
+    if (existingTeacher) {
+      existingTeacher.availableSeats += capacity;
+      existingTeacher.students = `${existingTeacher.availableSeats} available seats`;
+      return;
+    }
+
+    teacherMap.set(teacherId, {
+      id: teacherId,
+      name: classItem.teacherName ?? classItem.teacherUsername ?? "Teacher",
+      danceStyleId,
+      specialization: classItem.teacherSpecialization ?? classItem.danceStyle,
+      experience: classItem.teacherExperienceYears ? `${classItem.teacherExperienceYears} years experience` : "Experience not added",
+      students: `${capacity} available seats`,
+      time: `${formatClassDays(classDays)} • ${formatClassTime(classItem.startTime)}`,
+      image: classItem.teacherAvatarImageDataUrl || danceImages.story[index % danceImages.story.length],
+      bio: classItem.teacherBiography || classItem.description || `Teacher-created class for ${classItem.danceStyle}.`,
+      availableSeats: capacity,
+    });
+  });
+
+  return Array.from(teacherMap.values());
+}
 
 function getDanceStyle(data: EnrolmentData) {
   return danceStyles.find((style) => style.id === data.danceStyleId);
 }
 
 function getClassSlot(data: EnrolmentData) {
-  return classSlots.find((slot) => slot.id === data.slotId);
+  return getAvailableClassSlots().find((slot) => slot.id === data.slotId);
 }
 
 function getTeacher(data: EnrolmentData) {
-  return teachers.find((teacher) => teacher.id === data.teacherId);
+  return getAvailableTeachers().find((teacher) => teacher.id === data.teacherId);
 }
 
 function readStudentSession(): StudentAuthentication | null {
@@ -309,15 +434,69 @@ function saveDraft(data: EnrolmentData, step: EnrolmentStep) {
   localStorage.setItem(draftStorageKey, JSON.stringify({ data, step }));
 }
 
+function readSubmittedEnrolmentApplications(): SubmittedEnrolment[] {
+  const storedApplications = localStorage.getItem(submittedApplicationsStorageKey);
+  const applications: SubmittedEnrolment[] = [];
+
+  if (storedApplications) {
+    try {
+      const parsedApplications = JSON.parse(storedApplications) as SubmittedEnrolment[];
+
+      if (Array.isArray(parsedApplications)) {
+        applications.push(...parsedApplications.filter((application) => application.applicationId));
+      }
+    } catch {
+      localStorage.removeItem(submittedApplicationsStorageKey);
+    }
+  }
+
+  const storedApplication = localStorage.getItem(submittedStorageKey);
+
+  if (storedApplication) {
+    try {
+      const legacyApplication = JSON.parse(storedApplication) as SubmittedEnrolment;
+
+      if (
+        legacyApplication?.applicationId &&
+        !applications.some((application) => application.applicationId === legacyApplication.applicationId)
+      ) {
+        applications.push(legacyApplication);
+      }
+    } catch {
+      localStorage.removeItem(submittedStorageKey);
+    }
+  }
+
+  return applications.sort(
+    (first, second) => new Date(second.submittedAt).getTime() - new Date(first.submittedAt).getTime(),
+  );
+}
+
+function persistSubmittedEnrolment(application: SubmittedEnrolment) {
+  const currentApplications = readSubmittedEnrolmentApplications();
+  const nextApplications = [
+    application,
+    ...currentApplications.filter((currentApplication) => currentApplication.applicationId !== application.applicationId),
+  ];
+
+  localStorage.setItem(submittedStorageKey, JSON.stringify(application));
+  localStorage.setItem(submittedApplicationsStorageKey, JSON.stringify(nextApplications));
+}
+
 function readSubmittedEnrolment(): SubmittedEnrolment | null {
   const storedApplication = localStorage.getItem(submittedStorageKey);
 
   if (!storedApplication) {
-    return null;
+    return readSubmittedEnrolmentApplications()[0] ?? null;
   }
 
   try {
-    return JSON.parse(storedApplication) as SubmittedEnrolment;
+    const application = JSON.parse(storedApplication) as SubmittedEnrolment;
+    const latestApplication = readSubmittedEnrolmentApplications().find(
+      (currentApplication) => currentApplication.applicationId === application.applicationId,
+    );
+
+    return latestApplication ?? application;
   } catch {
     localStorage.removeItem(submittedStorageKey);
     return null;
@@ -326,9 +505,10 @@ function readSubmittedEnrolment(): SubmittedEnrolment | null {
 
 function getApplicationId() {
   const year = new Date().getFullYear();
-  const existing = readSubmittedEnrolment();
+  const applications = readSubmittedEnrolmentApplications();
+  const nextSequence = applications.length + 1;
 
-  return existing?.applicationId ?? `ENR-${year}-001`;
+  return `ENR-${year}-${String(nextSequence).padStart(3, "0")}`;
 }
 
 function validateStep(step: EnrolmentStep, data: EnrolmentData): ValidationErrors {
@@ -338,8 +518,8 @@ function validateStep(step: EnrolmentStep, data: EnrolmentData): ValidationError
     errors.danceStyleId = "Please select a dance style to continue.";
   }
 
-  if (step === 2 && !data.slotId) {
-    errors.slotId = "Please select a class date and time.";
+  if (step === 2 && (!data.slotId || !data.teacherId)) {
+    errors.slotId = "Please select a teacher class and time.";
   }
 
   if (step === 3 && !data.teacherId) {
@@ -455,7 +635,7 @@ export function StudentEnrolmentPage() {
     if (step === 6) {
       const application = createSubmittedEnrolment(data);
 
-      localStorage.setItem(submittedStorageKey, JSON.stringify(application));
+      persistSubmittedEnrolment(application);
       localStorage.removeItem(draftStorageKey);
       setSubmitted(application);
       setPhase("success");
@@ -492,7 +672,14 @@ export function StudentEnrolmentPage() {
                 <DanceStyleStep
                   value={data.danceStyleId}
                   error={errors.danceStyleId}
-                  onSelect={(danceStyleId) => updateData((current) => ({ ...current, danceStyleId }))}
+                  onSelect={(danceStyleId) =>
+                    updateData((current) => ({
+                      ...current,
+                      danceStyleId,
+                      slotId: current.danceStyleId === danceStyleId ? current.slotId : "",
+                      teacherId: current.danceStyleId === danceStyleId ? current.teacherId : "",
+                    }))
+                  }
                 />
               )}
               {step === 2 && (
@@ -501,16 +688,22 @@ export function StudentEnrolmentPage() {
                   value={data.slotId}
                   error={errors.slotId}
                   onChangeStyle={() => goToStep(1)}
-                  onSelect={(slotId) => updateData((current) => ({ ...current, slotId }))}
+                  onSelect={(slot) =>
+                    updateData((current) => ({
+                      ...current,
+                      slotId: slot.id,
+                      teacherId: slot.teacherId,
+                    }))
+                  }
                 />
               )}
               {step === 3 && (
                 <TeacherStep
                   selectedStyle={selectedStyle}
                   selectedSlot={selectedSlot}
-                  value={data.teacherId}
+                  selectedTeacher={selectedTeacher}
                   error={errors.teacherId}
-                  onSelect={(teacherId) => updateData((current) => ({ ...current, teacherId }))}
+                  onChangeClass={() => goToStep(2)}
                 />
               )}
               {step === 4 && (
@@ -685,12 +878,14 @@ function DanceStyleStep({
       subtitle="Select the discipline that resonates with your soul. Each path at Sankalana is designed to nurture technique, expression, and mastery."
       error={error}
     >
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
         {danceStyles.map((style) => (
           <SelectableCard
             key={style.id}
             selected={value === style.id}
-            icon={style.icon}
+            image={style.image}
+            badge={style.badge}
+            focus={style.focus}
             title={style.name}
             description={style.description}
             buttonLabel={value === style.id ? "Selected" : "Select"}
@@ -714,68 +909,146 @@ function DateTimeStep({
   value: string;
   error?: string;
   onChangeStyle: () => void;
-  onSelect: (slotId: string) => void;
+  onSelect: (slot: EnrolmentClassSlot) => void;
 }) {
+  const availableTeachers = getAvailableTeachers();
+  const availableSlots = getAvailableClassSlots();
+  const relevantTeachers = selectedStyle
+    ? availableTeachers.filter((teacher) => teacher.danceStyleId === selectedStyle.id)
+    : [];
+  const relevantSlots = selectedStyle
+    ? availableSlots.filter((slot) => slot.danceStyleId === selectedStyle.id)
+    : [];
+  const classDays = Array.from(new Set(relevantSlots.flatMap((slot) => slot.days)));
+
   return (
-    <StepShell eyebrow="Step 2 of 6" title="Select Date & Time" error={error}>
+    <StepShell
+      eyebrow="Step 2 of 6"
+      title="Select Date & Time"
+      subtitle="Choose a teacher and one of their available class times for your selected dance style."
+      error={error}
+    >
       <SummaryBanner
         label="Current Selection"
         title={selectedStyle?.name ?? "No dance style selected"}
-        meta="90 Minutes • Academy class placement"
+        meta={`${relevantTeachers.length} teachers • ${relevantSlots.length} available classes`}
         image={danceImages.heroCarousel[0].src}
         actionLabel="Change Style"
         onAction={onChangeStyle}
       />
 
-      <div className="mt-10 grid gap-7 lg:grid-cols-[24rem_1fr]">
+      <div className="mt-10 grid gap-7 lg:grid-cols-[22rem_1fr]">
         <div className="rounded-[1.35rem] border border-white/10 bg-[#211028] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
           <div className="flex items-center justify-between">
-            <h3 className="text-2xl font-black text-white">Class Week</h3>
+            <h3 className="text-2xl font-black text-white">Available Days</h3>
             <CalendarDays className="text-[#f0b7ff]" size={27} />
           </div>
           <div className="mt-7 grid grid-cols-4 gap-3 text-center">
-            {["Mon", "Wed", "Sat", "Sun"].map((day) => (
+            {classDays.map((day) => (
               <span key={day} className="rounded-2xl border border-white/10 bg-[#0b0310] px-4 py-5 text-sm font-black text-white/72">
                 {day}
               </span>
             ))}
+            {classDays.length === 0 && (
+              <span className="col-span-4 rounded-2xl border border-white/10 bg-[#0b0310] px-4 py-5 text-sm font-black text-white/54">
+                No days yet
+              </span>
+            )}
+          </div>
+          <div className="mt-7 rounded-2xl border border-cyanGlow/25 bg-cyanGlow/10 p-5">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-cyanGlow">Selection Rule</p>
+            <p className="mt-3 text-sm font-semibold leading-7 text-white/68">
+              Select one class time. The teacher assigned to that class will be saved with your enrolment.
+            </p>
           </div>
         </div>
 
         <div>
-          <h3 className="text-3xl font-black text-[#f4e7fb]">Available Class Slots</h3>
-          <div className="mt-6 grid gap-5">
-            {classSlots.map((slot) => {
-              const selected = value === slot.id;
+          <h3 className="text-3xl font-black text-[#f4e7fb]">
+            {selectedStyle ? `${selectedStyle.name} Teachers & Classes` : "Available Teachers & Classes"}
+          </h3>
+          <div className="mt-6 grid gap-6">
+            {relevantTeachers.length > 0 ? relevantTeachers.map((teacher) => {
+              const teacherSlots = relevantSlots.filter((slot) => slot.teacherId === teacher.id);
 
               return (
-                <button
-                  key={slot.id}
-                  type="button"
-                  onClick={() => onSelect(slot.id)}
-                  className={cn(
-                    "grid gap-5 rounded-[1.35rem] border p-6 text-left transition sm:grid-cols-[1fr_auto] sm:items-center",
-                    selected
-                      ? "border-cyanGlow bg-cyanGlow/12 shadow-[0_0_35px_rgba(34,211,238,0.25)]"
-                      : "border-white/10 bg-[#17091d]/88 hover:border-cyanGlow/45",
-                  )}
+                <article
+                  key={teacher.id}
+                  className="overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#17091d]/88 shadow-[0_24px_90px_rgba(0,0,0,0.28)]"
                 >
-                  <div>
-                    <p className={cn("text-2xl font-black", selected ? "text-cyanGlow" : "text-[#f4e7fb]")}>{slot.time}</p>
-                    <p className="mt-3 text-base font-black text-white/60">
-                      {slot.day} • {slot.studio}
-                    </p>
+                  <div className="grid gap-0 xl:grid-cols-[18rem_1fr]">
+                    <div className="relative min-h-64 overflow-hidden">
+                      <img src={teacher.image} alt="" className="absolute inset-0 h-full w-full object-cover grayscale" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-[#17091d] via-[#17091d]/34 to-transparent" />
+                      <div className="absolute bottom-0 p-6">
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-cyanGlow">{teacher.specialization}</p>
+                        <h4 className="mt-2 text-2xl font-black leading-tight text-white">{teacher.name}</h4>
+                      </div>
+                    </div>
+
+                    <div className="p-6">
+                      <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-start">
+                        <div>
+                          <div className="flex flex-wrap gap-3 text-xs font-black uppercase tracking-[0.1em] text-white/54">
+                            <span className="rounded-full border border-white/10 bg-white/[0.055] px-3 py-2">
+                              {teacher.experience}
+                            </span>
+                            <span className="rounded-full border border-white/10 bg-white/[0.055] px-3 py-2">
+                              {teacher.students} students
+                            </span>
+                          </div>
+                          <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-white/68">{teacher.bio}</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-6 grid gap-4">
+                        {teacherSlots.map((slot) => {
+                          const selected = value === slot.id;
+
+                          return (
+                            <button
+                              key={slot.id}
+                              type="button"
+                              onClick={() => onSelect(slot)}
+                              className={cn(
+                                "grid gap-5 rounded-2xl border p-5 text-left transition sm:grid-cols-[1fr_auto] sm:items-center",
+                                selected
+                                  ? "border-cyanGlow bg-cyanGlow/12 shadow-[0_0_35px_rgba(34,211,238,0.25)]"
+                                  : "border-white/10 bg-[#0b0310]/72 hover:border-cyanGlow/45",
+                              )}
+                            >
+                              <div>
+                                <p className={cn("text-xl font-black", selected ? "text-cyanGlow" : "text-[#f4e7fb]")}>
+                                  {slot.className}
+                                </p>
+                                <p className="mt-2 text-sm font-black text-white/60">
+                                  {slot.day} • {slot.time} • {slot.studio}
+                                </p>
+                              </div>
+                              <div className="grid gap-3 sm:justify-items-end">
+                                <span className="rounded-full bg-[#1f6770] px-4 py-2 text-xs font-black text-cyanGlow">
+                                  {slot.level}
+                                </span>
+                                <span className="text-sm font-black text-white/70">{slot.seats} seats available</span>
+                                {selected && <CircleCheck className="text-cyanGlow" size={34} />}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
-                  <div className="grid gap-3 sm:justify-items-end">
-                    <span className="rounded-full bg-[#1f6770] px-4 py-2 text-xs font-black text-cyanGlow">
-                      Level: {slot.level}
-                    </span>
-                    <span className="text-sm font-black text-white/70">{slot.seats} seats available</span>
-                    {selected && <CircleCheck className="text-cyanGlow" size={34} />}
-                  </div>
-                </button>
+                </article>
               );
-            })}
+            }) : (
+              <article className="rounded-[1.35rem] border border-white/10 bg-[#17091d]/88 p-7">
+                <Sparkles className="text-[#f0b7ff]" size={38} />
+                <h4 className="mt-5 text-2xl font-black text-white">No teacher classes available yet</h4>
+                <p className="mt-3 max-w-2xl text-sm font-semibold leading-7 text-white/64">
+                  When an approved teacher creates a class for {selectedStyle?.name ?? "this style"}, it will appear here with its schedule, studio, level, and available seats.
+                </p>
+              </article>
+            )}
           </div>
         </div>
       </div>
@@ -786,71 +1059,94 @@ function DateTimeStep({
 function TeacherStep({
   selectedStyle,
   selectedSlot,
-  value,
+  selectedTeacher,
   error,
-  onSelect,
+  onChangeClass,
 }: {
   selectedStyle?: (typeof danceStyles)[number];
-  selectedSlot?: (typeof classSlots)[number];
-  value: string;
+  selectedSlot?: EnrolmentClassSlot;
+  selectedTeacher?: EnrolmentTeacher;
   error?: string;
-  onSelect: (teacherId: string) => void;
+  onChangeClass: () => void;
 }) {
   return (
-    <StepShell eyebrow="Step 3 of 6" title="Select Your Teacher" error={error}>
+    <StepShell
+      eyebrow="Step 3 of 6"
+      title="Confirm Your Teacher"
+      subtitle="Review the teacher and class time selected from the available classes."
+      error={error}
+    >
       <div className="rounded-[1.35rem] border-l-4 border-cyanGlow bg-[#211028] p-6">
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="grid gap-5 lg:grid-cols-3">
           <SummaryItem icon={Sparkles} label="Course Style" value={selectedStyle?.name ?? "Not selected"} />
-          <SummaryItem icon={CalendarDays} label="Schedule" value={selectedSlot ? `${selectedSlot.day} • ${selectedSlot.time}` : "Not selected"} />
+          <SummaryItem icon={CalendarDays} label="Selected Class" value={selectedSlot?.className ?? "Not selected"} />
+          <SummaryItem icon={Clock3} label="Schedule" value={selectedSlot ? `${selectedSlot.day} • ${selectedSlot.time}` : "Not selected"} />
         </div>
       </div>
 
-      <div className="mt-10 grid gap-6 lg:grid-cols-3">
-        {teachers.map((teacher) => {
-          const selected = value === teacher.id;
+      {selectedTeacher && selectedSlot ? (
+        <article className="mt-10 overflow-hidden rounded-[1.35rem] border border-[#f0b7ff]/35 bg-[#17091d] shadow-[0_0_40px_rgba(217,28,255,0.16)]">
+          <div className="grid gap-0 lg:grid-cols-[25rem_1fr]">
+            <div className="relative min-h-80">
+              <img src={selectedTeacher.image} alt="" className="absolute inset-0 h-full w-full object-cover grayscale" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#17091d] via-[#17091d]/20 to-transparent" />
+              <CircleCheck className="absolute right-6 top-6 rounded-full bg-orchid text-[#f0b7ff]" size={38} />
+              <div className="absolute inset-x-0 bottom-0 p-7">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-cyanGlow">{selectedTeacher.specialization}</p>
+                <h3 className="mt-2 text-3xl font-black leading-tight text-white">{selectedTeacher.name}</h3>
+              </div>
+            </div>
+            <div className="p-7">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <SummaryMini label="Experience" value={selectedTeacher.experience} />
+                <SummaryMini label="Students" value={selectedTeacher.students} />
+                <SummaryMini label="Class Level" value={selectedSlot.level} />
+              </div>
 
-          return (
-            <article
-              key={teacher.id}
-              className={cn(
-                "overflow-hidden rounded-[1.35rem] border bg-[#17091d] shadow-[0_24px_90px_rgba(0,0,0,0.28)] transition",
-                selected ? "border-[#f0b7ff] shadow-[0_0_40px_rgba(217,28,255,0.24)]" : "border-white/10",
-              )}
-            >
-              <div className="relative h-60">
-                <img src={teacher.image} alt="" className="h-full w-full object-cover grayscale" />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#17091d] via-transparent to-transparent" />
-                {selected && <CircleCheck className="absolute right-5 top-5 rounded-full bg-orchid text-[#f0b7ff]" size={36} />}
-                <div className="absolute inset-x-0 bottom-0 p-6">
-                  <h3 className="text-2xl font-black text-white">{teacher.name}</h3>
-                  <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-cyanGlow">{teacher.specialization}</p>
+              <p className="mt-7 text-base font-semibold leading-8 text-white/68">{selectedTeacher.bio}</p>
+
+              <div className="mt-7 rounded-2xl border border-white/10 bg-[#0b0310]/72 p-5">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-white/42">Selected Class</p>
+                <h4 className="mt-2 text-2xl font-black text-[#f4e7fb]">{selectedSlot.className}</h4>
+                <div className="mt-4 grid gap-3 text-sm font-black text-white/68 sm:grid-cols-3">
+                  <span>{selectedSlot.day}</span>
+                  <span>{selectedSlot.time}</span>
+                  <span>{selectedSlot.studio}</span>
                 </div>
               </div>
-              <div className="p-6">
-                <div className="grid grid-cols-2 gap-3 text-sm font-black text-white/62">
-                  <p>Experience<br /><span className="text-lg text-white">{teacher.experience.split(" ")[0]} Years</span></p>
-                  <p>Students<br /><span className="text-lg text-white">{teacher.students}</span></p>
-                </div>
-                <p className="mt-5 min-h-20 text-base font-semibold leading-7 text-white/66">{teacher.bio}</p>
-                <p className="mt-3 text-sm font-black text-white/52">{teacher.time}</p>
-                <button
-                  type="button"
-                  onClick={() => onSelect(teacher.id)}
-                  className={cn(
-                    "mt-6 inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl text-sm font-black transition",
-                    selected
-                      ? "bg-gradient-to-r from-[#e8a3ff] to-[#c026ff] text-white"
-                      : "border border-cyanGlow text-cyanGlow hover:bg-cyanGlow/10",
-                  )}
-                >
-                  {selected ? "Selected" : "Select Teacher"}
-                </button>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+
+              <button
+                type="button"
+                onClick={onChangeClass}
+                className="mt-7 inline-flex min-h-12 items-center justify-center rounded-xl border border-cyanGlow px-6 text-sm font-black text-cyanGlow transition hover:bg-cyanGlow/10"
+              >
+                Change Teacher or Class Time
+              </button>
+            </div>
+          </div>
+        </article>
+      ) : (
+        <div className="mt-10 rounded-[1.35rem] border border-[#ff7aa8]/35 bg-[#ff7aa8]/10 p-6">
+          <p className="text-sm font-black text-[#ffb0c8]">Please choose a teacher class and time in Step 2.</p>
+          <button
+            type="button"
+            onClick={onChangeClass}
+            className="mt-5 inline-flex min-h-12 items-center justify-center rounded-xl border border-[#ffb0c8]/60 px-6 text-sm font-black text-[#ffb0c8]"
+          >
+            Back to Date & Time
+          </button>
+        </div>
+      )}
     </StepShell>
+  );
+}
+
+function SummaryMini({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.055] p-4">
+      <p className="text-xs font-black uppercase tracking-[0.12em] text-white/42">{label}</p>
+      <p className="mt-2 text-sm font-black text-white">{value}</p>
+    </div>
   );
 }
 
@@ -976,8 +1272,8 @@ function ReviewFinishStep({
 }: {
   data: EnrolmentData;
   selectedStyle?: (typeof danceStyles)[number];
-  selectedSlot?: (typeof classSlots)[number];
-  selectedTeacher?: (typeof teachers)[number];
+  selectedSlot?: EnrolmentClassSlot;
+  selectedTeacher?: EnrolmentTeacher;
   error?: string;
   onEdit: (step: EnrolmentStep) => void;
   onConfirm: (confirmed: boolean) => void;
@@ -989,7 +1285,8 @@ function ReviewFinishStep({
           <p className="font-black text-white">{selectedStyle?.name ?? "Not selected"}</p>
         </ReviewCard>
         <ReviewCard icon={CalendarDays} title="Selected Date & Time" onEdit={() => onEdit(2)}>
-          <p className="font-black text-white">{selectedSlot ? `${selectedSlot.day} • ${selectedSlot.time}` : "Not selected"}</p>
+          <p className="font-black text-white">{selectedSlot?.className ?? "Not selected"}</p>
+          <p className="mt-1 text-sm text-white/52">{selectedSlot ? `${selectedSlot.day} • ${selectedSlot.time}` : ""}</p>
           <p className="mt-1 text-sm text-white/52">{selectedSlot ? `${selectedSlot.seats} seats • ${selectedSlot.level}` : ""}</p>
         </ReviewCard>
         <ReviewCard icon={UserRound} title="Selected Teacher" onEdit={() => onEdit(3)}>
@@ -1042,7 +1339,7 @@ function EnrolmentSuccess({ application }: { application: SubmittedEnrolment }) 
             Enrolment Submitted Successfully
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-base font-semibold leading-7 text-white/68">
-            Your enrolment request has been submitted and is waiting for admin review.
+            Your enrolment request has been submitted and is waiting for teacher review.
           </p>
 
           <div className="mx-auto mt-8 grid max-w-xl gap-4 sm:grid-cols-2">
@@ -1059,7 +1356,7 @@ function EnrolmentSuccess({ application }: { application: SubmittedEnrolment }) 
           <div className="mx-auto mt-8 max-w-xl rounded-[1.35rem] border border-white/10 bg-[#211028] p-5 text-left">
             <h2 className="text-sm font-black text-[#f0b7ff]">Enrolment Summary</h2>
             <SummaryRow icon={Sparkles} label="Dance Style" value={selectedStyle?.name ?? "Not selected"} />
-            <SummaryRow icon={CalendarDays} label="Class Schedule" value={selectedSlot ? `${selectedSlot.day}, ${selectedSlot.time}` : "Not selected"} />
+            <SummaryRow icon={CalendarDays} label="Class Schedule" value={selectedSlot ? `${selectedSlot.className} • ${selectedSlot.day}, ${selectedSlot.time}` : "Not selected"} />
             <SummaryRow icon={UserRound} label="Instructor" value={selectedTeacher?.name ?? "Not selected"} />
           </div>
 
@@ -1109,7 +1406,9 @@ function StepShell({
 
 function SelectableCard({
   selected,
-  icon: Icon,
+  image,
+  badge,
+  focus,
   title,
   description,
   buttonLabel,
@@ -1117,7 +1416,9 @@ function SelectableCard({
   onClick,
 }: {
   selected: boolean;
-  icon: LucideIcon;
+  image: string;
+  badge: string;
+  focus: string;
   title: string;
   description: string;
   buttonLabel: string;
@@ -1125,33 +1426,56 @@ function SelectableCard({
   onClick: () => void;
 }) {
   const color = tone === "cyan" ? "text-cyanGlow border-cyanGlow" : tone === "pink" ? "text-[#ff9edc] border-[#ff9edc]" : "text-[#f0b7ff] border-[#f0b7ff]";
+  const selectedOverlay = tone === "cyan" ? "from-cyanGlow/22" : tone === "pink" ? "from-[#ff9edc]/22" : "from-[#f0b7ff]/24";
 
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "relative min-h-[24rem] rounded-[1.35rem] border p-7 text-left transition",
+        "group relative flex h-full min-h-[41rem] flex-col overflow-hidden rounded-[1.6rem] border text-left transition duration-300 hover:-translate-y-1",
         selected
-          ? "border-[#f0b7ff] bg-orchid/24 shadow-[0_0_40px_rgba(217,28,255,0.28)]"
-          : "border-white/10 bg-[#17091d]/88 hover:border-[#f0b7ff]/45",
+          ? "border-[#f0b7ff] bg-orchid/24 shadow-[0_0_46px_rgba(217,28,255,0.3)]"
+          : "border-white/10 bg-[#17091d]/88 shadow-[0_24px_80px_rgba(0,0,0,0.24)] hover:border-[#f0b7ff]/45 hover:shadow-[0_0_32px_rgba(217,28,255,0.14)]",
       )}
     >
-      {selected && <CircleCheck className="absolute right-6 top-6 text-[#f0b7ff]" size={34} />}
-      <span className={cn("inline-flex h-16 w-16 items-center justify-center rounded-full border bg-white/8", color)}>
-        <Icon size={30} />
-      </span>
-      <h2 className="mt-8 text-3xl font-black text-white">{title}</h2>
-      <p className="mt-5 min-h-28 text-base font-semibold leading-7 text-white/68">{description}</p>
-      <span
-        className={cn(
-          "mt-7 inline-flex min-h-14 w-full items-center justify-center rounded-xl text-lg font-black",
-          selected ? "bg-gradient-to-r from-[#e8a3ff] to-[#c026ff] text-white" : "border border-current",
-          color,
+      <div className="relative h-44 overflow-hidden">
+        <img
+          src={image}
+          alt=""
+          className="h-full w-full object-cover opacity-76 transition duration-500 group-hover:scale-105 group-hover:opacity-90"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#17091d] via-[#17091d]/32 to-transparent" />
+        <div className={cn("absolute inset-0 bg-gradient-to-br to-transparent opacity-80", selected ? selectedOverlay : "from-black/18")} />
+        <span className="absolute left-5 top-5 rounded-full border border-white/15 bg-black/45 px-3 py-1.5 text-[0.65rem] font-black uppercase tracking-[0.13em] text-white/82 backdrop-blur-md">
+          {badge}
+        </span>
+        {selected && (
+          <span className="absolute right-5 top-5 inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#f0b7ff] text-[#17061d] shadow-[0_0_24px_rgba(240,183,255,0.55)]">
+            <CircleCheck size={24} />
+          </span>
         )}
-      >
-        {buttonLabel}
-      </span>
+      </div>
+
+      <div className="flex flex-1 flex-col p-6">
+        <div className="flex flex-1 flex-col">
+          <h2 className="min-h-[4rem] text-2xl font-black leading-tight text-white">{title}</h2>
+          <p className="mt-4 min-h-[9rem] text-sm font-semibold leading-6 text-white/68">{description}</p>
+          <p className="mt-5 min-h-[4rem] rounded-2xl border border-white/10 bg-[#0b0310]/72 px-4 py-3 text-xs font-black uppercase tracking-[0.08em] text-white/54">
+            {focus}
+          </p>
+        </div>
+
+        <span
+          className={cn(
+            "inline-flex min-h-13 w-full items-center justify-center rounded-xl text-base font-black",
+            selected ? "bg-gradient-to-r from-[#e8a3ff] to-[#c026ff] text-white shadow-[0_18px_40px_rgba(217,28,255,0.28)]" : "border border-current",
+            color,
+          )}
+        >
+          {buttonLabel}
+        </span>
+      </div>
     </button>
   );
 }
@@ -1338,7 +1662,7 @@ function StepActions({
   const nextLabel = step === 1
     ? "Next: Select Date & Time"
     : step === 2
-      ? "Next: Select Teacher"
+      ? "Next: Confirm Teacher"
       : step === 3
         ? "Next: Personal Information"
         : step === 4
