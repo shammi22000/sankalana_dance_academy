@@ -45,7 +45,7 @@ export function StorySection() {
             </p>
             <p>
               The platform removes friction from administration, giving instructors, students, and
-              operators a shared place to coordinate schedules, payments, attendance, and progress.
+              operators a shared place to coordinate schedules, enrolments, attendance, and progress.
             </p>
           </div>
 

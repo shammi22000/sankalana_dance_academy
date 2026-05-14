@@ -6,7 +6,6 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
-  CreditCard,
   FileText,
   Flag,
   Grid2X2,
@@ -100,7 +99,6 @@ export function StudentDashboardPage() {
     { label: "My Classes", icon: Sparkles },
     { label: "Schedule", icon: CalendarDays },
     { label: "Performances", icon: Theater },
-    { label: "Payments", icon: CreditCard },
     { label: "Settings", icon: Settings },
   ];
 

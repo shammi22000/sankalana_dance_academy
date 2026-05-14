@@ -7,7 +7,6 @@ import {
   ClipboardCheck,
   ClipboardList,
   Clock3,
-  CreditCard,
   Edit3,
   FileText,
   Grid2X2,
@@ -64,6 +63,7 @@ type AttendanceRecord = {
 };
 
 type TeacherReviewStatus = "Pending Review" | "Approved" | "Rejected";
+type TeacherRequestStatusFilter = TeacherReviewStatus | "All";
 
 type TeacherReviewEnrolmentData = {
   danceStyleId: string;
@@ -452,7 +452,6 @@ export function TeacherDashboardPage() {
     { label: "Attendance", icon: ClipboardCheck },
     { label: "Schedule", icon: CalendarDays },
     { label: "Performances", icon: Theater },
-    { label: "Payments", icon: CreditCard },
     { label: "Settings", icon: Settings },
   ];
 
@@ -850,9 +849,40 @@ function TeacherEnrolmentRequestsSection({
   teacher: TeacherAuthentication["teacher"];
 }) {
   const [applications, setApplications] = useState<TeacherReviewApplication[]>(() => getApplicationsForTeacher(teacher));
+  const [statusFilter, setStatusFilter] = useState<TeacherRequestStatusFilter>("All");
+  const [classFilter, setClassFilter] = useState("All");
+  const [searchTerm, setSearchTerm] = useState("");
   const pendingCount = applications.filter((application) => application.status === "Pending Review").length;
   const approvedCount = applications.filter((application) => application.status === "Approved").length;
   const rejectedCount = applications.filter((application) => application.status === "Rejected").length;
+  const classOptions = Array.from(
+    new Map(
+      applications.map((application) => {
+        const classItem = getClassForApplication(application);
+
+        return [application.data.slotId, classItem?.className ?? "Class not found"];
+      }),
+    ),
+  );
+  const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+  const filteredApplications = applications.filter((application) => {
+    const classItem = getClassForApplication(application);
+    const searchableText = [
+      application.applicationId,
+      application.data.personal.fullName,
+      application.data.personal.email,
+      application.data.personal.phone,
+      application.data.guardian.fullName,
+      classItem?.className,
+      classItem?.classLevel,
+    ].join(" ").toLowerCase();
+
+    return (
+      (statusFilter === "All" || application.status === statusFilter) &&
+      (classFilter === "All" || application.data.slotId === classFilter) &&
+      (!normalizedSearchTerm || searchableText.includes(normalizedSearchTerm))
+    );
+  });
 
   async function handleDecision(application: TeacherReviewApplication, status: Exclude<TeacherReviewStatus, "Pending Review">) {
     const approving = status === "Approved";
@@ -911,6 +941,76 @@ function TeacherEnrolmentRequestsSection({
         <ClassMetric icon={XCircle} label="Rejected" value={String(rejectedCount)} detail="Requests declined" />
       </div>
 
+      {applications.length > 0 && (
+        <section className="mt-8 rounded-[1.5rem] border border-white/[0.12] bg-white/[0.055] p-5 shadow-[0_24px_90px_rgba(0,0,0,0.24)] backdrop-blur-xl">
+          <div className="grid gap-4 xl:grid-cols-[1fr_13rem_16rem]">
+            <label className="grid gap-3">
+              <span className="text-xs font-black uppercase tracking-[0.14em] text-white/52">Search Student</span>
+              <span className="flex min-h-12 items-center gap-3 rounded-xl border border-white/10 bg-[#0b0310]/82 px-4 text-white/70 focus-within:border-cyanGlow/55">
+                <Search size={18} className="text-cyanGlow" />
+                <input
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Name, email, phone, application ID..."
+                  className="min-h-11 flex-1 bg-transparent text-sm font-semibold text-white outline-none placeholder:text-white/32"
+                />
+              </span>
+            </label>
+
+            <label className="grid gap-3">
+              <span className="text-xs font-black uppercase tracking-[0.14em] text-white/52">Status</span>
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as TeacherRequestStatusFilter)}
+                className="min-h-12 rounded-xl border border-white/10 bg-[#0b0310] px-4 text-sm font-black text-white outline-none focus:border-cyanGlow/55"
+              >
+                {(["All", "Pending Review", "Approved", "Rejected"] as TeacherRequestStatusFilter[]).map((status) => (
+                  <option key={status} value={status} className="bg-[#0b0310] text-white">
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="grid gap-3">
+              <span className="text-xs font-black uppercase tracking-[0.14em] text-white/52">Class</span>
+              <select
+                value={classFilter}
+                onChange={(event) => setClassFilter(event.target.value)}
+                className="min-h-12 rounded-xl border border-white/10 bg-[#0b0310] px-4 text-sm font-black text-white outline-none focus:border-cyanGlow/55"
+              >
+                <option value="All" className="bg-[#0b0310] text-white">All Classes</option>
+                {classOptions.map(([classId, className]) => (
+                  <option key={classId} value={classId} className="bg-[#0b0310] text-white">
+                    {className}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-center gap-3 text-xs font-black uppercase tracking-[0.12em] text-white/48">
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.06] px-4 py-2">
+              <ListFilter size={15} />
+              Showing {filteredApplications.length} of {applications.length}
+            </span>
+            {(statusFilter !== "All" || classFilter !== "All" || searchTerm.trim()) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter("All");
+                  setClassFilter("All");
+                  setSearchTerm("");
+                }}
+                className="rounded-full border border-white/10 px-4 py-2 text-[#f0b7ff] transition hover:border-[#f0b7ff]/45 hover:text-white"
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
       {applications.length === 0 ? (
         <article className="mt-10 overflow-hidden rounded-[2rem] border border-white/[0.12] bg-white/[0.055] shadow-[0_32px_110px_rgba(0,0,0,0.36)] backdrop-blur-xl">
           <div className="grid gap-8 p-7 lg:grid-cols-[1fr_24rem] lg:p-10">
@@ -934,94 +1034,129 @@ function TeacherEnrolmentRequestsSection({
           </div>
         </article>
       ) : (
-        <div className="mt-10 grid gap-6">
-          {applications.map((application) => {
-            const classItem = getClassForApplication(application);
-            const pending = application.status === "Pending Review";
+        <section className="mt-8 overflow-hidden rounded-[1.5rem] border border-white/[0.12] bg-[#17091d]/92 shadow-[0_24px_90px_rgba(0,0,0,0.28)]">
+          <div className="hidden grid-cols-[1.15fr_1.25fr_1fr_0.85fr_0.9fr] gap-4 border-b border-white/10 bg-white/[0.04] px-6 py-4 text-xs font-black uppercase tracking-[0.14em] text-white/42 xl:grid">
+            <span>Student</span>
+            <span>Class</span>
+            <span>Contact</span>
+            <span>Status</span>
+            <span className="text-right">Action</span>
+          </div>
 
-            return (
-              <article
+          <div className="divide-y divide-white/10">
+            {filteredApplications.length > 0 ? filteredApplications.map((application) => (
+              <TeacherRequestRow
                 key={application.applicationId}
-                className={cn(
-                  "overflow-hidden rounded-[1.5rem] border bg-[#17091d]/92 shadow-[0_24px_90px_rgba(0,0,0,0.28)]",
-                  pending ? "border-[#f0b7ff]/28" : "border-white/[0.12]",
-                )}
-              >
-                <div className="grid gap-0 xl:grid-cols-[1fr_20rem]">
-                  <div className="p-6 sm:p-7">
-                    <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <TeacherRequestStatusBadge status={application.status} />
-                          <span className="rounded-full border border-white/10 bg-white/[0.055] px-4 py-2 text-xs font-black uppercase tracking-[0.12em] text-white/52">
-                            {application.applicationId}
-                          </span>
-                        </div>
-                        <h2 className="mt-5 text-3xl font-black text-[#f4e7fb]">
-                          {application.data.personal.fullName}
-                        </h2>
-                        <p className="mt-2 text-sm font-semibold text-white/56">
-                          Submitted {formatClassDate(application.submittedAt)}
-                        </p>
-                      </div>
-
-                      {pending && (
-                        <div className="flex flex-col gap-3 sm:flex-row">
-                          <button
-                            type="button"
-                            onClick={() => handleDecision(application, "Approved")}
-                            className="inline-flex min-h-12 items-center justify-center gap-3 rounded-xl bg-cyanGlow px-5 text-sm font-black text-ink transition hover:-translate-y-0.5"
-                          >
-                            <CheckCircle2 size={19} />
-                            Accept
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDecision(application, "Rejected")}
-                            className="inline-flex min-h-12 items-center justify-center gap-3 rounded-xl border border-[#ff7aa8]/55 px-5 text-sm font-black text-[#ffb0c8] transition hover:bg-[#ff7aa8]/10"
-                          >
-                            <XCircle size={19} />
-                            Reject
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mt-7 grid gap-4 lg:grid-cols-3">
-                      <TeacherRequestInfo label="Class" value={classItem?.className ?? "Class not found"} />
-                      <TeacherRequestInfo label="Schedule" value={formatClassSchedule(classItem)} />
-                      <TeacherRequestInfo label="Level / Seats" value={classItem ? `${classItem.classLevel} • ${classItem.capacity} seats` : "Not available"} />
-                    </div>
-
-                    <div className="mt-5 grid gap-4 lg:grid-cols-3">
-                      <TeacherRequestInfo label="Student Phone" value={application.data.personal.phone} />
-                      <TeacherRequestInfo label="Student Email" value={application.data.personal.email} />
-                      <TeacherRequestInfo label="Guardian" value={`${application.data.guardian.fullName} • ${application.data.guardian.phone}`} />
-                    </div>
-
-                    {application.adminComment && (
-                      <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.055] p-4">
-                        <p className="text-xs font-black uppercase tracking-[0.12em] text-white/42">Decision Note</p>
-                        <p className="mt-2 text-sm font-semibold leading-6 text-white/68">{application.adminComment}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <aside className="relative min-h-72 overflow-hidden border-t border-white/10 xl:border-l xl:border-t-0">
-                    <img src={teacher.avatarImageDataUrl || danceImages.heroCarousel[0].src} alt="" className="absolute inset-0 h-full w-full object-cover opacity-64" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#17091d] via-[#17091d]/48 to-transparent" />
-                    <div className="absolute bottom-6 left-6 right-6">
-                      <p className="text-xs font-black uppercase tracking-[0.16em] text-cyanGlow">{teacher.danceStyles}</p>
-                      <p className="mt-2 text-2xl font-black text-white">{teacher.fullName}</p>
-                    </div>
-                  </aside>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+                application={application}
+                classItem={getClassForApplication(application)}
+                onApprove={() => handleDecision(application, "Approved")}
+                onReject={() => handleDecision(application, "Rejected")}
+              />
+            )) : (
+              <div className="p-7 text-center">
+                <Search className="mx-auto text-[#f0b7ff]" size={34} />
+                <h3 className="mt-4 text-2xl font-black text-white">No matching enrolment rows</h3>
+                <p className="mx-auto mt-2 max-w-xl text-sm font-semibold leading-7 text-white/58">
+                  Change the filters or clear them to view all enrolment requests.
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
       )}
     </section>
+  );
+}
+
+function TeacherRequestRow({
+  application,
+  classItem,
+  onApprove,
+  onReject,
+}: {
+  application: TeacherReviewApplication;
+  classItem?: CreatedTeacherClass;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  const pending = application.status === "Pending Review";
+
+  return (
+    <article
+      className={cn(
+        "grid gap-5 px-5 py-5 transition hover:bg-white/[0.035] xl:grid-cols-[1.15fr_1.25fr_1fr_0.85fr_0.9fr] xl:items-center xl:px-6",
+        application.status === "Approved" ? "bg-cyanGlow/[0.035]" : application.status === "Rejected" ? "bg-[#ff7aa8]/[0.035]" : "",
+      )}
+    >
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-white/10 bg-white/[0.055] px-3 py-1.5 text-[0.68rem] font-black uppercase tracking-[0.1em] text-white/48">
+            {application.applicationId}
+          </span>
+          <span className="text-xs font-semibold text-white/42">
+            {formatClassDate(application.submittedAt)}
+          </span>
+        </div>
+        <h3 className="mt-3 break-words text-xl font-black text-[#f4e7fb]">
+          {application.data.personal.fullName}
+        </h3>
+        <p className="mt-1 text-xs font-semibold text-white/50">
+          {application.data.personal.gender} • DOB {application.data.personal.dateOfBirth || "Not set"}
+        </p>
+      </div>
+
+      <div className="min-w-0">
+        <p className="text-sm font-black text-white">{classItem?.className ?? "Class not found"}</p>
+        <p className="mt-2 text-xs font-semibold leading-5 text-white/56">{formatClassSchedule(classItem)}</p>
+        <p className="mt-2 text-xs font-black uppercase tracking-[0.1em] text-cyanGlow">
+          {classItem ? `${classItem.classLevel} • ${classItem.capacity} seats • ${classItem.studio}` : "Not available"}
+        </p>
+      </div>
+
+      <div className="min-w-0">
+        <p className="break-words text-sm font-black text-white/82">{application.data.personal.phone}</p>
+        <p className="mt-1 break-words text-xs font-semibold text-white/52">{application.data.personal.email}</p>
+        <p className="mt-2 break-words text-xs font-semibold text-white/48">
+          Guardian: {application.data.guardian.fullName || "Not provided"} • {application.data.guardian.phone || "No phone"}
+        </p>
+      </div>
+
+      <div>
+        <TeacherRequestStatusBadge status={application.status} />
+        {!pending && (
+          <p className="mt-2 text-xs font-semibold text-white/46">
+            {application.reviewedAt ? `Reviewed ${formatClassDate(application.reviewedAt)}` : "Decision saved"}
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2 sm:flex-row xl:justify-end">
+        {pending ? (
+          <>
+            <button
+              type="button"
+              onClick={onApprove}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-cyanGlow px-4 text-xs font-black text-ink transition hover:-translate-y-0.5"
+            >
+              <CheckCircle2 size={17} />
+              Accept
+            </button>
+            <button
+              type="button"
+              onClick={onReject}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#ff7aa8]/55 px-4 text-xs font-black text-[#ffb0c8] transition hover:bg-[#ff7aa8]/10"
+            >
+              <XCircle size={17} />
+              Reject
+            </button>
+          </>
+        ) : (
+          <span className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/10 px-4 text-xs font-black uppercase tracking-[0.1em] text-white/46">
+            Completed
+          </span>
+        )}
+      </div>
+    </article>
   );
 }
 
@@ -1043,15 +1178,6 @@ function TeacherRequestStatusBadge({ status }: { status: TeacherReviewStatus }) 
       {rejected ? <XCircle size={15} /> : <BadgeCheck size={15} />}
       {status}
     </span>
-  );
-}
-
-function TeacherRequestInfo({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.055] p-4">
-      <p className="text-xs font-black uppercase tracking-[0.12em] text-white/42">{label}</p>
-      <p className="mt-2 break-words text-sm font-black text-white/82">{value}</p>
-    </div>
   );
 }
 
