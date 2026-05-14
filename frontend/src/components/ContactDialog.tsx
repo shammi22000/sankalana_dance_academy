@@ -1,6 +1,7 @@
 import { FormEvent, useEffect } from "react";
 import { X } from "lucide-react";
 import { useContactForm } from "../hooks/useContactForm";
+import { showErrorAlert, showSuccessAlert } from "../utils/alerts";
 import { Button } from "./Button";
 
 interface ContactDialogProps {
@@ -10,7 +11,7 @@ interface ContactDialogProps {
 }
 
 export function ContactDialog({ open, source, onClose }: ContactDialogProps) {
-  const { values, state, error, updateField, submit, resetStatus } = useContactForm(source);
+  const { values, state, updateField, submit, resetStatus } = useContactForm(source);
 
   useEffect(() => {
     if (!open) {
@@ -34,7 +35,15 @@ export function ContactDialog({ open, source, onClose }: ContactDialogProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await submit();
+    const result = await submit();
+
+    if (result.success) {
+      await showSuccessAlert("Inquiry Sent", result.message);
+      onClose();
+      return;
+    }
+
+    await showErrorAlert("Inquiry Failed", result.message);
   }
 
   return (
@@ -94,17 +103,6 @@ export function ContactDialog({ open, source, onClose }: ContactDialogProps) {
               required
             />
           </label>
-
-          {state === "success" && (
-            <p className="rounded-xl border border-cyanGlow/30 bg-cyanGlow/10 px-4 py-3 text-sm font-semibold text-cyanGlow">
-              Inquiry received. We will reach out soon.
-            </p>
-          )}
-          {state === "error" && (
-            <p className="rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-200">
-              {error}
-            </p>
-          )}
 
           <Button type="submit" disabled={state === "submitting"} className="mt-2 w-full">
             {state === "submitting" ? "Sending..." : "Send Inquiry"}

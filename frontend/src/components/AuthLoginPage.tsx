@@ -5,6 +5,7 @@ import { danceImages } from "../assets/danceImages";
 import { PageFooter } from "./PageFooter";
 import { PageHeader } from "./PageHeader";
 import type { LoginCredentials } from "../types/auth";
+import { showErrorAlert, showSuccessAlert } from "../utils/alerts";
 
 interface AuthLoginPageProps {
   roleLabel: "Student" | "Teacher";
@@ -16,7 +17,6 @@ interface AuthLoginPageProps {
 export function AuthLoginPage({ roleLabel, subtitle, statusMessage, onSubmit }: AuthLoginPageProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
-  const [message, setMessage] = useState("");
   const registrationPath = roleLabel === "Student" ? "/student-register" : "/teacher-register";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -28,16 +28,20 @@ export function AuthLoginPage({ roleLabel, subtitle, statusMessage, onSubmit }: 
     };
 
     setStatus("submitting");
-    setMessage("");
 
     try {
       const successMessage = onSubmit ? await onSubmit(credentials) : statusMessage;
 
       setStatus("success");
-      setMessage(successMessage || statusMessage);
+
+      if (!onSubmit || successMessage) {
+        await showSuccessAlert("Login Successful", successMessage || statusMessage);
+      }
     } catch (loginError) {
+      const errorMessage = loginError instanceof Error ? loginError.message : "Unable to login right now.";
+
       setStatus("error");
-      setMessage(loginError instanceof Error ? loginError.message : "Unable to login right now.");
+      await showErrorAlert("Login Failed", errorMessage);
     }
   }
 
@@ -130,18 +134,6 @@ export function AuthLoginPage({ roleLabel, subtitle, statusMessage, onSubmit }: 
                   Register Now
                 </Link>
               </div>
-
-              {(status === "success" || status === "error") && (
-                <p
-                  className={`rounded-2xl border px-5 py-4 text-center text-sm font-bold ${
-                    status === "success"
-                      ? "border-cyanGlow/30 bg-cyanGlow/10 text-cyanGlow"
-                      : "border-red-400/30 bg-red-500/10 text-red-200"
-                  }`}
-                >
-                  {message}
-                </p>
-              )}
             </form>
           </div>
         </section>

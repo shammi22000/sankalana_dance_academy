@@ -20,6 +20,17 @@ export class MongoTeacherRegistrationRepository implements TeacherRegistrationRe
     return TeacherRegistration.fromPersistence(document);
   }
 
+  async findAll(): Promise<TeacherRegistration[]> {
+    const collection = await this.database.collection<TeacherRegistrationDocument>("teacherRegistrations");
+    const documents = await collection.find().sort({ createdAt: -1 }).toArray();
+
+    return documents.flatMap((document) => {
+      const entity = this.toEntity(document);
+
+      return entity ? [entity] : [];
+    });
+  }
+
   async findByEmail(email: string): Promise<TeacherRegistration | null> {
     const collection = await this.database.collection<TeacherRegistrationDocument>("teacherRegistrations");
 
@@ -59,6 +70,17 @@ export class MongoTeacherRegistrationRepository implements TeacherRegistrationRe
     const result = await collection.findOneAndUpdate(
       { id },
       { $set: { applicationStatus: status } },
+      { returnDocument: "after" },
+    );
+
+    return this.toEntity(result);
+  }
+
+  async updatePasswordHash(id: string, passwordHash: string): Promise<TeacherRegistration | null> {
+    const collection = await this.database.collection<TeacherRegistrationDocument>("teacherRegistrations");
+    const result = await collection.findOneAndUpdate(
+      { id },
+      { $set: { passwordHash } },
       { returnDocument: "after" },
     );
 

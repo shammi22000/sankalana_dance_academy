@@ -1,10 +1,11 @@
 import { FormEvent, useState } from "react";
 import { ArrowRight, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
-import { Navigate, useNavigate } from "react-router-dom";
 import { danceImages } from "../assets/danceImages";
 import { PageFooter } from "../components/PageFooter";
 import { PageHeader } from "../components/PageHeader";
 import { loginAdmin } from "../services/authService";
+import { showErrorAlert, showSuccessAlert } from "../utils/alerts";
+import { AdminDashboardPage } from "./AdminDashboardPage";
 
 const adminSessionKey = "sankalanaAdminSession";
 
@@ -13,12 +14,11 @@ function hasAdminSession() {
 }
 
 export function AdminLoginPage() {
-  const navigate = useNavigate();
-  const [error, setError] = useState("");
+  const [hasSession, setHasSession] = useState(hasAdminSession);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (hasAdminSession()) {
-    return <Navigate to="/admin-dashboard" replace />;
+  if (hasSession) {
+    return <AdminDashboardPage onLogout={() => setHasSession(false)} />;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -28,15 +28,18 @@ export function AdminLoginPage() {
     const password = String(formData.get("password") ?? "");
 
     setIsSubmitting(true);
-    setError("");
 
     try {
       const authentication = await loginAdmin({ username, password });
 
       localStorage.setItem(adminSessionKey, JSON.stringify(authentication));
-      navigate("/admin-dashboard", { replace: true });
+      await showSuccessAlert("Login Successful", "Welcome back, Admin.");
+      setHasSession(true);
     } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : "Invalid admin username or password.");
+      await showErrorAlert(
+        "Login Failed",
+        loginError instanceof Error ? loginError.message : "Invalid admin username or password.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -119,12 +122,6 @@ export function AdminLoginPage() {
                 <p className="text-center text-sm font-bold italic text-white/48">
                   Default demo credentials: admin / admin
                 </p>
-
-                {error && (
-                  <p className="rounded-2xl border border-red-400/30 bg-red-500/10 px-5 py-4 text-center text-sm font-bold text-red-200">
-                    {error}
-                  </p>
-                )}
               </form>
             </div>
           </div>
