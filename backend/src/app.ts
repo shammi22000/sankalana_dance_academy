@@ -7,15 +7,24 @@ import { AuthenticateTeacherUseCase } from "./application/use-cases/Authenticate
 import { CreateContactInquiryUseCase } from "./application/use-cases/CreateContactInquiryUseCase";
 import { CreateStudentRegistrationUseCase } from "./application/use-cases/CreateStudentRegistrationUseCase";
 import { CreateTeacherRegistrationUseCase } from "./application/use-cases/CreateTeacherRegistrationUseCase";
+import { ManageAttendanceRecordsUseCase } from "./application/use-cases/ManageAttendanceRecordsUseCase";
+import { ManageEnrolmentApplicationsUseCase } from "./application/use-cases/ManageEnrolmentApplicationsUseCase";
+import { ManageTeacherClassesUseCase } from "./application/use-cases/ManageTeacherClassesUseCase";
 import { ManageRegistrationApprovalsUseCase } from "./application/use-cases/ManageRegistrationApprovalsUseCase";
 import { mongoDatabase } from "./infrastructure/database/MongoDatabase";
+import { MongoAttendanceRecordRepository } from "./infrastructure/repositories/MongoAttendanceRecordRepository";
 import { MongoContactInquiryRepository } from "./infrastructure/repositories/MongoContactInquiryRepository";
+import { MongoEnrolmentApplicationRepository } from "./infrastructure/repositories/MongoEnrolmentApplicationRepository";
 import { MongoStudentRegistrationRepository } from "./infrastructure/repositories/MongoStudentRegistrationRepository";
+import { MongoTeacherClassRepository } from "./infrastructure/repositories/MongoTeacherClassRepository";
 import { MongoTeacherRegistrationRepository } from "./infrastructure/repositories/MongoTeacherRegistrationRepository";
 import { AdminRegistrationController } from "./presentation/controllers/AdminRegistrationController";
+import { AttendanceRecordController } from "./presentation/controllers/AttendanceRecordController";
 import { AuthController } from "./presentation/controllers/AuthController";
 import { ContactController } from "./presentation/controllers/ContactController";
+import { EnrolmentApplicationController } from "./presentation/controllers/EnrolmentApplicationController";
 import { StudentRegistrationController } from "./presentation/controllers/StudentRegistrationController";
+import { TeacherClassController } from "./presentation/controllers/TeacherClassController";
 import { TeacherRegistrationController } from "./presentation/controllers/TeacherRegistrationController";
 import { createApiRoutes } from "./presentation/routes";
 import { errorHandler } from "./presentation/middlewares/errorHandler";
@@ -32,6 +41,23 @@ const studentRegistrationController = new StudentRegistrationController(createSt
 const teacherRegistrationRepository = new MongoTeacherRegistrationRepository(mongoDatabase);
 const createTeacherRegistrationUseCase = new CreateTeacherRegistrationUseCase(teacherRegistrationRepository);
 const teacherRegistrationController = new TeacherRegistrationController(createTeacherRegistrationUseCase);
+const teacherClassRepository = new MongoTeacherClassRepository(mongoDatabase);
+const manageTeacherClassesUseCase = new ManageTeacherClassesUseCase(
+  teacherClassRepository,
+  teacherRegistrationRepository,
+);
+const teacherClassController = new TeacherClassController(manageTeacherClassesUseCase);
+const enrolmentApplicationRepository = new MongoEnrolmentApplicationRepository(mongoDatabase);
+const manageEnrolmentApplicationsUseCase = new ManageEnrolmentApplicationsUseCase(
+  enrolmentApplicationRepository,
+  studentRegistrationRepository,
+  teacherRegistrationRepository,
+  teacherClassRepository,
+);
+const enrolmentApplicationController = new EnrolmentApplicationController(manageEnrolmentApplicationsUseCase);
+const attendanceRecordRepository = new MongoAttendanceRecordRepository(mongoDatabase);
+const manageAttendanceRecordsUseCase = new ManageAttendanceRecordsUseCase(attendanceRecordRepository);
+const attendanceRecordController = new AttendanceRecordController(manageAttendanceRecordsUseCase);
 const authenticateStudentUseCase = new AuthenticateStudentUseCase(studentRegistrationRepository);
 const authenticateTeacherUseCase = new AuthenticateTeacherUseCase(teacherRegistrationRepository);
 const authenticateAdminUseCase = new AuthenticateAdminUseCase();
@@ -65,6 +91,11 @@ app.use(
     authController,
     adminRegistrationController,
     authenticateAdminUseCase,
+    teacherClassController,
+    authenticateTeacherUseCase,
+    enrolmentApplicationController,
+    authenticateStudentUseCase,
+    attendanceRecordController,
   ),
 );
 

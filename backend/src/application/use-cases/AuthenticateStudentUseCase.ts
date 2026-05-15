@@ -8,6 +8,8 @@ import { verifyPassword } from "../security/passwordHash";
 import type { StudentRegistrationRepository } from "../../domain/repositories/StudentRegistrationRepository";
 
 export class AuthenticateStudentUseCase {
+  private readonly sessionStudentIds = new Map<string, string>();
+
   constructor(private readonly studentRegistrationRepository: StudentRegistrationRepository) {}
 
   async execute(dto: AuthenticateStudentDTO): Promise<StudentAuthenticationResponseDTO> {
@@ -36,13 +38,21 @@ export class AuthenticateStudentUseCase {
       );
     }
 
+    const studentJson = student.toJSON();
+    const token = randomUUID();
+
+    this.sessionStudentIds.set(token, studentJson.id);
+
     return {
-      student: student.toJSON(),
+      student: studentJson,
       session: {
-        token: randomUUID(),
+        token,
         issuedAt: new Date().toISOString(),
       },
     };
   }
 
+  getStudentIdForSessionToken(token: string): string | null {
+    return this.sessionStudentIds.get(token) ?? null;
+  }
 }

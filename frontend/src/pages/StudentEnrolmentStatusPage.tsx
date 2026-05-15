@@ -13,9 +13,10 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { danceImages } from "../assets/danceImages";
+import { getStudentEnrolments } from "../services/enrolmentService";
 import { cn } from "../utils/cn";
 import {
   getClassSlot,
@@ -35,7 +36,31 @@ const timelineItems = [
 
 export function StudentEnrolmentStatusPage() {
   const navigate = useNavigate();
-  const [application] = useState<SubmittedEnrolment | null>(() => readSubmittedEnrolment());
+  const [application, setApplication] = useState<SubmittedEnrolment | null>(() => readSubmittedEnrolment());
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadApplication() {
+      try {
+        const applications = await getStudentEnrolments();
+
+        if (isMounted) {
+          setApplication(applications[0] ?? null);
+        }
+      } catch {
+        if (isMounted) {
+          setApplication(readSubmittedEnrolment());
+        }
+      }
+    }
+
+    void loadApplication();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   function handleEditApplication() {
     if (!application) {
