@@ -59,6 +59,7 @@ class MongoDatabase {
             database.collection("enrolmentApplications").createIndex({ submittedAt: -1 }),
             database.collection("attendanceRecords").createIndex({ id: 1 }, { unique: true }),
             database.collection("attendanceRecords").createIndex({ teacherId: 1 }),
+            database.collection("attendanceRecords").createIndex({ studentId: 1 }),
             database.collection("attendanceRecords").createIndex({ classId: 1 }),
             database.collection("attendanceRecords").createIndex({ date: -1 }),
             database

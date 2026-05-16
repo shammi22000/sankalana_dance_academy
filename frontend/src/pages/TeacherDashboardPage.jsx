@@ -1,10 +1,10 @@
 import { BadgeCheck, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardList, Clock3, Edit3, FileText, Grid2X2, ListFilter, LogOut, Mail, MapPin, Phone, Plus, Save, Search, Settings, Sparkles, Star, Theater, Trash2, Upload, UserRound, UsersRound, X, XCircle, } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Navigate, useNavigate } from "react-router-dom";
 import { danceImages } from "../assets/danceImages";
 import { PageHeader } from "../components/PageHeader";
-import { attendanceRecordsCacheKey, getTeacherAttendanceRecords, saveTeacherAttendanceSession, } from "../services/attendanceService";
+import { attendanceRecordsCacheKey, getTeacherAttendanceRecords, saveTeacherAttendanceSession, updateTeacherAttendanceRecord, } from "../services/attendanceService";
 import { getTeacherEnrolments, submittedEnrolmentApplicationsCacheKey, submittedEnrolmentCacheKey, updateTeacherEnrolmentStatus, } from "../services/enrolmentService";
 import { createTeacherClass, deleteTeacherClass, getMyTeacherClasses, teacherClassCacheKey, updateTeacherClass, } from "../services/teacherClassService";
 import { showConfirmAlert, showErrorAlert, showSuccessAlert } from "../utils/alerts";
@@ -14,75 +14,8 @@ const attendanceStorageKey = attendanceRecordsCacheKey;
 const createdClassesStorageKey = teacherClassCacheKey;
 const submittedEnrolmentStorageKey = submittedEnrolmentCacheKey;
 const submittedEnrolmentApplicationsStorageKey = submittedEnrolmentApplicationsCacheKey;
-const attendanceClasses = [
-    { id: "advanced-contemporary-jazz", name: "Advanced Contemporary Jazz", level: "Advanced", enrolled: 8 },
-    { id: "kandyan-foundations", name: "Kandyan Foundations", level: "Beginner", enrolled: 8 },
-    { id: "hip-hop-advanced", name: "Hip Hop Advanced", level: "Advanced", enrolled: 8 },
-    { id: "classical-ballet", name: "Classical Ballet", level: "Intermediate", enrolled: 8 },
-];
 const classDayOptions = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const attendanceStudents = [
-    { id: "ST-8821", name: "Amara Perera", avatar: danceImages.story[0] },
-    { id: "ST-8822", name: "Ethan Thorne", avatar: danceImages.story[1] },
-    { id: "ST-8823", name: "Mila Chen", avatar: danceImages.story[2] },
-    { id: "ST-8824", name: "Nethmi Fernando", avatar: danceImages.heroCarousel[0] },
-    { id: "ST-8825", name: "Kavindu Silva", avatar: danceImages.heroCarousel[1] },
-    { id: "ST-8826", name: "Sarah Jenkins", avatar: danceImages.heroCarousel[2] },
-    { id: "ST-8827", name: "Liam Chen", avatar: danceImages.story[3] },
-    { id: "ST-8828", name: "Ananya Sharma", avatar: danceImages.story[0] },
-];
-const seededAttendanceRecords = [
-    {
-        id: "seed-1",
-        classId: "advanced-contemporary-jazz",
-        className: "Advanced Contemporary Jazz",
-        date: "2026-05-11",
-        studentId: "ST-8822",
-        studentName: "Ethan Thorne",
-        status: "present",
-        remarks: "Arrived 5 mins early.",
-    },
-    {
-        id: "seed-2",
-        classId: "classical-ballet",
-        className: "Classical Ballet",
-        date: "2026-05-10",
-        studentId: "ST-8823",
-        studentName: "Mila Chen",
-        status: "late",
-        remarks: "Traffic delay reported.",
-    },
-    {
-        id: "seed-3",
-        classId: "hip-hop-advanced",
-        className: "Hip Hop Advanced",
-        date: "2026-05-10",
-        studentId: "ST-8826",
-        studentName: "Sarah Jenkins",
-        status: "absent",
-        remarks: "No prior notice.",
-    },
-    {
-        id: "seed-4",
-        classId: "advanced-contemporary-jazz",
-        className: "Advanced Contemporary Jazz",
-        date: "2026-05-09",
-        studentId: "ST-8827",
-        studentName: "Liam Chen",
-        status: "present",
-        remarks: "",
-    },
-    {
-        id: "seed-5",
-        classId: "kandyan-foundations",
-        className: "Kandyan Foundations",
-        date: "2026-05-09",
-        studentId: "ST-8828",
-        studentName: "Ananya Sharma",
-        status: "late",
-        remarks: "Medical appointment.",
-    },
-];
+const attendanceStatusOptions = ["present", "absent", "late"];
 function getStoredTeacherSession() {
     const storedSession = localStorage.getItem(sessionStorageKey);
     if (!storedSession) {
@@ -112,27 +45,20 @@ function formatAttendanceDate(value) {
         year: "numeric",
     });
 }
-function createInitialAttendance() {
-    return attendanceStudents.reduce((entries, student, index) => {
-        entries[student.id] = {
-            status: index === 1 || index === 4 ? "present" : index === 2 ? "late" : "",
-            remarks: index === 1 ? "Arrived 5 mins early for warm up" : index === 2 ? "Traffic delay reported" : "",
-        };
-        return entries;
-    }, {});
-}
 function readAttendanceRecords() {
     const storedRecords = localStorage.getItem(attendanceStorageKey);
     if (!storedRecords) {
-        return seededAttendanceRecords;
+        return [];
     }
     try {
         const parsedRecords = JSON.parse(storedRecords);
-        return Array.isArray(parsedRecords) ? parsedRecords : seededAttendanceRecords;
+        return Array.isArray(parsedRecords)
+            ? parsedRecords.filter((record) => attendanceStatusOptions.includes(record.status))
+            : [];
     }
     catch {
         localStorage.removeItem(attendanceStorageKey);
-        return seededAttendanceRecords;
+        return [];
     }
 }
 function persistAttendanceRecords(records) {
@@ -227,6 +153,40 @@ function getApplicationsForTeacher(teacher) {
 }
 function getClassForApplication(application) {
     return readCreatedClasses().find((classItem) => classItem.id === application.data.slotId);
+}
+function getApprovedApplicationsForTeacher(teacher) {
+    return getApplicationsForTeacher(teacher).filter((application) => application.status === "Approved");
+}
+function getAttendanceStudentsForClass(applications, classId) {
+    const studentsById = new Map();
+    applications
+        .filter((application) => application.status === "Approved" && application.data.slotId === classId)
+        .forEach((application, index) => {
+        const studentId = application.studentId || application.applicationId;
+        if (!studentId || studentsById.has(studentId)) {
+            return;
+        }
+        studentsById.set(studentId, {
+            id: studentId,
+            applicationId: application.applicationId,
+            name: application.data.personal.fullName || "Unnamed Student",
+            email: application.data.personal.email || "",
+            phone: application.data.personal.phone || "",
+            avatar: danceImages.story[index % danceImages.story.length],
+        });
+    });
+    return Array.from(studentsById.values()).sort((first, second) => first.name.localeCompare(second.name));
+}
+function createAttendanceEntriesForStudents(students, records, classId, date) {
+    return students.reduce((entries, student) => {
+        const savedRecord = records.find((record) => record.classId === classId && record.date === date && record.studentId === student.id);
+        const savedStatus = attendanceStatusOptions.includes(savedRecord?.status) ? savedRecord.status : "";
+        entries[student.id] = {
+            status: savedStatus,
+            remarks: savedRecord?.remarks ?? "",
+        };
+        return entries;
+    }, {});
 }
 function formatClassSchedule(classItem) {
     if (!classItem) {
@@ -454,7 +414,7 @@ export function TeacherDashboardPage() {
                   </article>
                 </div>
               </div>
-            </section>) : activeSection === "My Classes" ? (<TeacherClassesSection teacher={teacher} onMarkAttendance={() => setActiveSection("Attendance")}/>) : activeSection === "Enrol Requests" ? (<TeacherEnrolmentRequestsSection teacher={teacher}/>) : activeSection === "Attendance" ? (<TeacherAttendanceSection />) : (<section className="relative z-10 mx-auto max-w-7xl">
+            </section>) : activeSection === "My Classes" ? (<TeacherClassesSection teacher={teacher} onMarkAttendance={() => setActiveSection("Attendance")}/>) : activeSection === "Enrol Requests" ? (<TeacherEnrolmentRequestsSection teacher={teacher}/>) : activeSection === "Attendance" ? (<TeacherAttendanceSection teacher={teacher}/>) : (<section className="relative z-10 mx-auto max-w-7xl">
             <div className="flex flex-col gap-7 xl:flex-row xl:items-start xl:justify-between">
               <div>
                 <h1 className="text-5xl font-black leading-none text-[#f4e7fb] sm:text-6xl">
@@ -1287,41 +1247,64 @@ function ClassProgress({ label, value, tone, }) {
       </div>
     </div>);
 }
-function TeacherAttendanceSection() {
-    const [selectedClassId, setSelectedClassId] = useState(attendanceClasses[0].id);
+function TeacherAttendanceSection({ teacher }) {
+    const [teacherClasses, setTeacherClasses] = useState(() => readCreatedClasses().filter((classItem) => isClassOwnedByTeacher(classItem, teacher)));
+    const [approvedApplications, setApprovedApplications] = useState(() => getApprovedApplicationsForTeacher(teacher));
+    const [selectedClassId, setSelectedClassId] = useState(() => teacherClasses[0]?.id ?? "");
     const [selectedDate, setSelectedDate] = useState(getTodayInputValue());
     const [searchQuery, setSearchQuery] = useState("");
-    const [attendanceEntries, setAttendanceEntries] = useState(() => createInitialAttendance());
+    const [attendanceEntries, setAttendanceEntries] = useState({});
     const [records, setRecords] = useState(() => readAttendanceRecords());
     const [recordClassFilter, setRecordClassFilter] = useState("all");
     const [recordDateFilter, setRecordDateFilter] = useState("");
     const [recordStatusFilter, setRecordStatusFilter] = useState("all");
     const [recordsPage, setRecordsPage] = useState(1);
+    const [isLoadingAttendance, setIsLoadingAttendance] = useState(true);
+    const selectedClass = useMemo(() => teacherClasses.find((classItem) => classItem.id === selectedClassId) ?? teacherClasses[0] ?? null, [teacherClasses, selectedClassId]);
+    const currentStudents = useMemo(() => getAttendanceStudentsForClass(approvedApplications, selectedClass?.id ?? ""), [approvedApplications, selectedClass]);
     useEffect(() => {
         let isMounted = true;
-        async function loadAttendanceRecords() {
+        async function loadAttendanceData() {
+            setIsLoadingAttendance(true);
             try {
-                const databaseRecords = await getTeacherAttendanceRecords();
+                const [classes, teacherApplications, databaseRecords] = await Promise.all([
+                    getMyTeacherClasses(),
+                    getTeacherEnrolments(),
+                    getTeacherAttendanceRecords(),
+                ]);
                 if (isMounted) {
-                    setRecords(databaseRecords);
+                    const cachedOwnedClasses = readCreatedClasses().filter((classItem) => isClassOwnedByTeacher(classItem, teacher));
+                    const databaseOwnedClasses = classes.filter((classItem) => isClassOwnedByTeacher(classItem, teacher));
+                    const ownedClasses = databaseOwnedClasses.length > 0 ? databaseOwnedClasses : cachedOwnedClasses;
+                    setTeacherClasses(ownedClasses);
+                    setApprovedApplications(teacherApplications.filter((application) => application.status === "Approved"));
+                    setRecords(databaseRecords.filter((record) => attendanceStatusOptions.includes(record.status)));
+                    setSelectedClassId((currentClassId) => currentClassId || ownedClasses[0]?.id || "");
                 }
             }
             catch (error) {
                 if (isMounted) {
-                    await showErrorAlert("Attendance Not Loaded", error instanceof Error ? error.message : "Unable to load attendance records.");
+                    await showErrorAlert("Attendance Not Loaded", error instanceof Error ? error.message : "Unable to load attendance data.");
+                }
+            }
+            finally {
+                if (isMounted) {
+                    setIsLoadingAttendance(false);
                 }
             }
         }
-        void loadAttendanceRecords();
+        void loadAttendanceData();
         return () => {
             isMounted = false;
         };
-    }, []);
-    const selectedClass = attendanceClasses.find((classItem) => classItem.id === selectedClassId) ?? attendanceClasses[0];
-    const markedCount = attendanceStudents.filter((student) => attendanceEntries[student.id]?.status).length;
-    const progressPercent = Math.round((markedCount / attendanceStudents.length) * 100);
-    const visibleStudents = attendanceStudents.filter((student) => {
-        const searchValue = `${student.name} ${student.id}`.toLowerCase();
+    }, [teacher.id]);
+    useEffect(() => {
+        setAttendanceEntries(createAttendanceEntriesForStudents(currentStudents, records, selectedClass?.id ?? "", selectedDate));
+    }, [currentStudents, records, selectedClass, selectedDate]);
+    const markedCount = currentStudents.filter((student) => attendanceEntries[student.id]?.status).length;
+    const progressPercent = currentStudents.length > 0 ? Math.round((markedCount / currentStudents.length) * 100) : 0;
+    const visibleStudents = currentStudents.filter((student) => {
+        const searchValue = `${student.name} ${student.email} ${student.phone}`.toLowerCase();
         return searchValue.includes(searchQuery.toLowerCase().trim());
     });
     const filteredRecords = records.filter((record) => {
@@ -1334,6 +1317,10 @@ function TeacherAttendanceSection() {
     const totalRecordPages = Math.max(1, Math.ceil(filteredRecords.length / recordsPerPage));
     const currentRecordPage = Math.min(recordsPage, totalRecordPages);
     const paginatedRecords = filteredRecords.slice((currentRecordPage - 1) * recordsPerPage, currentRecordPage * recordsPerPage);
+    const remainingCount = Math.max(currentStudents.length - markedCount, 0);
+    const selectedSchedule = selectedClass
+        ? `${selectedClass.startTime} - ${selectedClass.endTime} • ${selectedClass.studio}`
+        : "No class selected";
     function updateAttendanceStatus(studentId, status) {
         setAttendanceEntries((current) => ({
             ...current,
@@ -1353,7 +1340,7 @@ function TeacherAttendanceSection() {
         }));
     }
     function handleMarkAllPresent() {
-        setAttendanceEntries((current) => attendanceStudents.reduce((entries, student) => {
+        setAttendanceEntries((current) => currentStudents.reduce((entries, student) => {
             entries[student.id] = {
                 status: "present",
                 remarks: current[student.id]?.remarks ?? "",
@@ -1362,17 +1349,25 @@ function TeacherAttendanceSection() {
         }, {}));
     }
     async function handleSaveAttendance() {
-        const unmarkedStudents = attendanceStudents.filter((student) => !attendanceEntries[student.id]?.status);
+        if (!selectedClass) {
+            await showErrorAlert("Class Required", "Create a class before marking attendance.");
+            return;
+        }
+        if (currentStudents.length === 0) {
+            await showErrorAlert("No Approved Students", "Approve enrolment requests for this class before saving attendance.");
+            return;
+        }
+        const unmarkedStudents = currentStudents.filter((student) => !attendanceEntries[student.id]?.status);
         if (unmarkedStudents.length > 0) {
             await showErrorAlert("Attendance Incomplete", `Please mark attendance for ${unmarkedStudents.length} student${unmarkedStudents.length === 1 ? "" : "s"} before saving.`);
             return;
         }
-        const sessionRecords = attendanceStudents.map((student) => {
+        const sessionRecords = currentStudents.map((student) => {
             const entry = attendanceEntries[student.id];
             return {
                 id: `${selectedClass.id}-${selectedDate}-${student.id}`,
                 classId: selectedClass.id,
-                className: selectedClass.name,
+                className: selectedClass.className,
                 date: selectedDate,
                 studentId: student.id,
                 studentName: student.name,
@@ -1383,7 +1378,7 @@ function TeacherAttendanceSection() {
         try {
             const savedSessionRecords = await saveTeacherAttendanceSession({
                 classId: selectedClass.id,
-                className: selectedClass.name,
+                className: selectedClass.className,
                 date: selectedDate,
                 records: sessionRecords.map((record) => ({
                     studentId: record.studentId,
@@ -1399,116 +1394,225 @@ function TeacherAttendanceSection() {
             setRecordClassFilter(selectedClass.id);
             setRecordDateFilter(selectedDate);
             setRecordsPage(1);
-            await showSuccessAlert("Attendance Saved", `${selectedClass.name} attendance has been saved for ${formatAttendanceDate(selectedDate)}.`);
+            await showSuccessAlert("Attendance Saved", `${selectedClass.className} attendance has been saved for ${formatAttendanceDate(selectedDate)}.`);
         }
         catch (error) {
             await showErrorAlert("Attendance Not Saved", error instanceof Error ? error.message : "Unable to save attendance.");
         }
     }
+    async function handleUpdateAttendanceRecord(record, updates) {
+        try {
+            const updatedRecord = await updateTeacherAttendanceRecord(record.id, updates);
+            const nextRecords = records.map((currentRecord) => currentRecord.id === updatedRecord.id ? updatedRecord : currentRecord);
+            setRecords(nextRecords);
+            persistAttendanceRecords(nextRecords);
+            await showSuccessAlert("Attendance Updated", `${record.studentName}'s attendance record has been updated.`);
+        }
+        catch (error) {
+            await showErrorAlert("Attendance Not Updated", error instanceof Error ? error.message : "Unable to update attendance record.");
+            throw error;
+        }
+    }
+    async function handleDeleteAttendanceRecord(record) {
+        const result = await showConfirmAlert("Delete Attendance Record", `Delete ${record.studentName}'s attendance record for ${formatAttendanceDate(record.date)}?`, "Delete");
+        if (!result.isConfirmed) {
+            return;
+        }
+        try {
+            const relatedSessionRecords = records.filter((currentRecord) => currentRecord.classId === record.classId && currentRecord.date === record.date && currentRecord.id !== record.id);
+            const savedSessionRecords = await saveTeacherAttendanceSession({
+                classId: record.classId,
+                className: record.className,
+                date: record.date,
+                records: relatedSessionRecords.map((currentRecord) => ({
+                    studentId: currentRecord.studentId,
+                    studentName: currentRecord.studentName,
+                    status: currentRecord.status,
+                    remarks: currentRecord.remarks ?? "",
+                })),
+            });
+            const unrelatedRecords = records.filter((currentRecord) => !(currentRecord.classId === record.classId && currentRecord.date === record.date));
+            const nextRecords = [...savedSessionRecords, ...unrelatedRecords];
+            setRecords(nextRecords);
+            persistAttendanceRecords(nextRecords);
+            await showSuccessAlert("Attendance Deleted", "The attendance record has been deleted.");
+        }
+        catch (error) {
+            await showErrorAlert("Attendance Not Deleted", error instanceof Error ? error.message : "Unable to delete attendance record.");
+        }
+    }
     return (<section className="relative z-10 mx-auto max-w-7xl pb-10">
-      <div className="flex flex-col gap-7 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <h1 className="text-5xl font-black leading-none text-[#f0b7ff] sm:text-6xl">Attendance</h1>
-          <p className="mt-4 max-w-2xl text-base font-semibold leading-7 text-white/70">
-            Mark student participation for the current class session and review previous attendance logs.
-          </p>
-        </div>
+      <div className="grid gap-5 xl:grid-cols-[20rem_18rem_1fr] xl:items-end">
+        <label className="block">
+          <span className="text-xs font-black uppercase tracking-[0.16em] text-white/72">Class Selection</span>
+          <select value={selectedClass?.id ?? ""} onChange={(event) => setSelectedClassId(event.target.value)} className="mt-2 h-16 w-full rounded-2xl border border-white/10 bg-[#241029] px-5 text-base font-black text-white outline-none transition focus:border-[#f0b7ff]">
+            {teacherClasses.length === 0 && <option value="">No classes</option>}
+            {teacherClasses.map((classItem) => (<option key={classItem.id} value={classItem.id}>
+                {classItem.className}
+              </option>))}
+          </select>
+        </label>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block">
-            <span className="text-xs font-black uppercase tracking-[0.18em] text-white/74">Select Class</span>
-            <select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#2a1230] px-4 text-sm font-black text-white outline-none transition focus:border-[#f0b7ff]">
-              {attendanceClasses.map((classItem) => (<option key={classItem.id} value={classItem.id}>
-                  {classItem.name}
-                </option>))}
-            </select>
-          </label>
+        <label className="block">
+          <span className="text-xs font-black uppercase tracking-[0.16em] text-white/72">Date</span>
+          <span className="mt-2 flex h-16 items-center gap-4 rounded-2xl border border-white/10 bg-[#241029] px-5 text-white focus-within:border-[#f0b7ff]">
+            <CalendarDays size={24} className="text-[#f0b7ff]"/>
+            <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="min-h-12 flex-1 bg-transparent text-base font-black text-white outline-none [color-scheme:dark]"/>
+          </span>
+        </label>
 
-          <label className="block">
-            <span className="text-xs font-black uppercase tracking-[0.18em] text-white/74">Date</span>
-            <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#2a1230] px-4 text-sm font-black text-white outline-none transition focus:border-[#f0b7ff]"/>
-          </label>
+        <div className="flex justify-start xl:justify-end">
+          <button type="button" onClick={handleMarkAllPresent} disabled={currentStudents.length === 0} className="inline-flex min-h-16 items-center justify-center gap-3 rounded-full bg-gradient-to-r from-[#bb26ff] to-[#e026b4] px-9 text-base font-black text-white shadow-[0_20px_60px_rgba(217,28,255,0.34)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45">
+            <CheckCircle2 size={22}/>
+            Mark All Present
+          </button>
         </div>
       </div>
 
-      <article className="mt-8 rounded-[1.35rem] border border-white/10 bg-white/[0.055] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-xl">
-        <div className="flex items-center justify-between gap-5">
+      <article className="mt-8 overflow-hidden rounded-[1.35rem] border-2 border-[#f0b7ff]/55 bg-white/[0.055] p-7 shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-xl">
+        <div className="grid gap-7 xl:grid-cols-[1fr_30rem] xl:items-center">
           <div>
-            <h2 className="flex items-center gap-3 text-base font-black text-white/78">
-              <ClipboardCheck className="text-cyanGlow" size={21}/>
-              Completion Progress
-            </h2>
-            <p className="mt-2 text-sm font-semibold text-white/48">
-              {selectedClass.level} class - {formatAttendanceDate(selectedDate)}
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-4xl font-black leading-none text-[#f4e7fb] sm:text-5xl">
+                {selectedClass?.className ?? "Attendance"}
+              </h1>
+              <span className="rounded-full bg-[#f0b7ff]/18 px-4 py-2 text-xs font-black uppercase tracking-[0.12em] text-[#f0b7ff]">
+                In Progress
+              </span>
+            </div>
+            <p className="mt-4 flex flex-wrap items-center gap-2 text-lg font-black text-white/66">
+              <Clock3 size={18} className="text-white/50"/>
+              {selectedSchedule}
             </p>
           </div>
-          <p className="text-sm font-black text-[#f0b7ff]">
-            {markedCount} / {attendanceStudents.length} Students
-          </p>
+
+          <div className="grid grid-cols-3 divide-x divide-white/10 rounded-2xl bg-black/10 p-4">
+            <AttendanceMetric value={currentStudents.length} label="Enrolled" tone="pink"/>
+            <AttendanceMetric value={markedCount} label="Marked" tone="cyan"/>
+            <AttendanceMetric value={remainingCount} label="Remaining" tone="light"/>
+          </div>
         </div>
-        <div className="mt-5 h-4 overflow-hidden rounded-full bg-white/10">
-          <div className="h-full rounded-full bg-gradient-to-r from-[#bb26ff] via-[#6577ff] to-cyanGlow shadow-[0_0_30px_rgba(34,211,238,0.35)]" style={{ width: `${progressPercent}%` }}/>
+        <div className="mt-6 h-2 overflow-hidden rounded-full bg-white/10">
+          <div className="h-full rounded-full bg-gradient-to-r from-[#bb26ff] via-[#6577ff] to-cyanGlow" style={{ width: `${progressPercent}%` }}/>
         </div>
       </article>
 
-      <div className="mt-7 grid gap-4 lg:grid-cols-[1fr_auto_auto]">
+      <div className="mt-12 grid gap-5 lg:grid-cols-[1fr_24rem] lg:items-end">
+        <h2 className="text-3xl font-black text-[#f4e7fb]">Student Roster</h2>
         <label className="relative block">
-          <Search className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-white/34" size={21}/>
-          <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search students by name or ID..." className="h-14 w-full rounded-xl border border-white/10 bg-white/[0.055] pl-14 pr-4 text-sm font-semibold text-white outline-none transition placeholder:text-white/34 focus:border-[#f0b7ff]"/>
+          <Search className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-white/42" size={22}/>
+          <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search students..." className="h-16 w-full rounded-2xl border border-white/10 bg-white/[0.055] pl-14 pr-4 text-base font-semibold text-white outline-none transition placeholder:text-white/34 focus:border-[#f0b7ff]"/>
         </label>
-
-        <button type="button" onClick={handleMarkAllPresent} className="inline-flex min-h-14 items-center justify-center gap-3 rounded-xl border border-[#f0b7ff]/60 px-7 text-sm font-black text-[#f0b7ff] transition hover:bg-[#f0b7ff]/10">
-          <CheckCircle2 size={20}/>
-          Mark All Present
-        </button>
-
-        <button type="button" onClick={handleSaveAttendance} className="inline-flex min-h-14 items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-[#bb26ff] to-[#e026b4] px-7 text-sm font-black text-white shadow-[0_18px_45px_rgba(217,28,255,0.32)] transition hover:-translate-y-0.5">
-          <Save size={19}/>
-          Save Attendance
-        </button>
       </div>
 
-      <div className="mt-7 grid gap-4">
-        {visibleStudents.map((student) => {
+      <div className="mt-7 grid gap-5">
+        {isLoadingAttendance && currentStudents.length === 0 ? (<article className="rounded-[1.35rem] border border-white/10 bg-white/[0.055] p-8 text-center shadow-[0_18px_70px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+            <ClipboardCheck className="mx-auto text-cyanGlow" size={38}/>
+            <h2 className="mt-4 text-2xl font-black text-[#f4e7fb]">Loading current students</h2>
+            <p className="mt-2 text-sm font-semibold text-white/58">Checking approved enrolments for your classes.</p>
+          </article>) : !selectedClass ? (<article className="rounded-[1.35rem] border border-white/10 bg-white/[0.055] p-8 text-center shadow-[0_18px_70px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+            <Sparkles className="mx-auto text-[#f0b7ff]" size={38}/>
+            <h2 className="mt-4 text-2xl font-black text-[#f4e7fb]">Create a class first</h2>
+            <p className="mt-2 text-sm font-semibold text-white/58">Attendance appears after students enrol in one of your created classes and you approve them.</p>
+          </article>) : currentStudents.length === 0 ? (<article className="rounded-[1.35rem] border border-white/10 bg-white/[0.055] p-8 text-center shadow-[0_18px_70px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+            <UsersRound className="mx-auto text-cyanGlow" size={38}/>
+            <h2 className="mt-4 text-2xl font-black text-[#f4e7fb]">No approved students in this class</h2>
+            <p className="mx-auto mt-2 max-w-2xl text-sm font-semibold leading-7 text-white/58">
+              Students will appear here after they enrol in {selectedClass.className} and you accept their request in Enrol Requests.
+            </p>
+          </article>) : visibleStudents.length === 0 ? (<article className="rounded-[1.35rem] border border-white/10 bg-white/[0.055] p-8 text-center shadow-[0_18px_70px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+            <Search className="mx-auto text-[#f0b7ff]" size={38}/>
+            <h2 className="mt-4 text-2xl font-black text-[#f4e7fb]">No students match your search</h2>
+            <p className="mt-2 text-sm font-semibold text-white/58">Clear the search to show all approved students for this class.</p>
+          </article>) : visibleStudents.map((student) => {
             const entry = attendanceEntries[student.id] ?? { status: "", remarks: "" };
             const avatarSrc = getImageSource(student.avatar);
-            return (<article key={student.id} className={cn("grid gap-5 rounded-[1.35rem] border border-white/10 bg-white/[0.055] p-5 shadow-[0_18px_70px_rgba(0,0,0,0.18)] backdrop-blur-xl lg:grid-cols-[12rem_10rem_1fr]", entry.status === "present" && "border-emerald-300/50 bg-emerald-300/[0.055]", entry.status === "absent" && "border-[#ff7aa8]/45 bg-[#ff7aa8]/[0.055]", entry.status === "late" && "border-amber-300/45 bg-amber-300/[0.055]")}>
+            return (<article key={student.id} className={cn("grid gap-5 rounded-[1.35rem] border border-white/10 bg-white/[0.055] p-5 shadow-[0_18px_70px_rgba(0,0,0,0.18)] backdrop-blur-xl xl:grid-cols-[21rem_1fr_22rem] xl:items-center", entry.status === "present" && "border-[#bb26ff]/50 bg-[#bb26ff]/[0.055]", entry.status === "absent" && "border-[#f6a89c]/55 bg-[#f6a89c]/[0.055]", entry.status === "late" && "border-cyanGlow/55 bg-cyanGlow/[0.055]")}>
               <div className="flex items-center gap-4">
                 <img src={avatarSrc} alt="" className="h-14 w-14 rounded-full border border-[#f0b7ff]/40 object-cover shadow-[0_0_22px_rgba(240,183,255,0.18)]"/>
                 <div>
                   <h3 className="text-base font-black text-[#f4e7fb]">{student.name}</h3>
-                  <p className="text-sm font-black text-white/58">ID: {student.id}</p>
+                  <p className="mt-1 break-words text-xs font-semibold text-white/42">{student.email || student.phone || "Contact details not provided"}</p>
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <AttendanceStatusButton status="present" active={entry.status === "present"} onClick={() => updateAttendanceStatus(student.id, "present")}/>
                 <AttendanceStatusButton status="absent" active={entry.status === "absent"} onClick={() => updateAttendanceStatus(student.id, "absent")}/>
                 <AttendanceStatusButton status="late" active={entry.status === "late"} onClick={() => updateAttendanceStatus(student.id, "late")}/>
               </div>
 
-              <input value={entry.remarks} onChange={(event) => updateAttendanceRemarks(student.id, event.target.value)} placeholder="Add remarks (optional)..." className="h-12 self-center rounded-none border border-white/10 bg-black/10 px-4 text-sm font-semibold italic text-white outline-none transition placeholder:text-white/34 focus:border-[#f0b7ff]"/>
+              <input value={entry.remarks} onChange={(event) => updateAttendanceRemarks(student.id, event.target.value)} placeholder="Add remark..." className="h-12 self-center rounded-xl border border-white/10 bg-black/10 px-4 text-sm font-semibold italic text-white outline-none transition placeholder:text-white/34 focus:border-[#f0b7ff]"/>
             </article>);
         })}
       </div>
 
-      <AttendanceRecordsPanel records={paginatedRecords} currentPage={currentRecordPage} totalPages={totalRecordPages} classFilter={recordClassFilter} dateFilter={recordDateFilter} statusFilter={recordStatusFilter} onClassFilterChange={setRecordClassFilter} onDateFilterChange={setRecordDateFilter} onStatusFilterChange={setRecordStatusFilter} onApplyFilters={() => setRecordsPage(1)} onPreviousPage={() => setRecordsPage((page) => Math.max(1, page - 1))} onNextPage={() => setRecordsPage((page) => Math.min(totalRecordPages, page + 1))}/>
+      <div className="mt-8 flex justify-end">
+        <button type="button" onClick={handleSaveAttendance} disabled={currentStudents.length === 0} className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-[#bb26ff] to-[#e026b4] px-7 text-base font-black text-white shadow-[0_18px_45px_rgba(217,28,255,0.3)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-45">
+          <Save size={21}/>
+          Save Attendance
+        </button>
+      </div>
+
+      <AttendanceRecordsPanel records={paginatedRecords} classOptions={teacherClasses} currentPage={currentRecordPage} totalPages={totalRecordPages} classFilter={recordClassFilter} dateFilter={recordDateFilter} statusFilter={recordStatusFilter} onClassFilterChange={setRecordClassFilter} onDateFilterChange={setRecordDateFilter} onStatusFilterChange={setRecordStatusFilter} onApplyFilters={() => setRecordsPage(1)} onPreviousPage={() => setRecordsPage((page) => Math.max(1, page - 1))} onNextPage={() => setRecordsPage((page) => Math.min(totalRecordPages, page + 1))} onUpdateRecord={handleUpdateAttendanceRecord} onDeleteRecord={handleDeleteAttendanceRecord}/>
     </section>);
 }
+function AttendanceMetric({ value, label, tone }) {
+    return (<div className="px-4 py-2 text-center">
+      <p className={cn("text-4xl font-black leading-none", tone === "cyan" ? "text-cyanGlow" : tone === "light" ? "text-[#f4e7fb]" : "text-[#f0b7ff]")}>
+        {String(value).padStart(2, "0")}
+      </p>
+      <p className="mt-1 text-xs font-black text-white/62">{label}</p>
+    </div>);
+}
 function AttendanceStatusButton({ status, active, onClick, }) {
-    const Icon = status === "present" ? CheckCircle2 : status === "absent" ? XCircle : Clock3;
-    return (<button type="button" onClick={onClick} className={cn("inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-4 text-xs font-black uppercase transition", active
-            ? status === "present"
-                ? "border-emerald-300/45 bg-emerald-300/16 text-emerald-300 shadow-[0_0_24px_rgba(110,231,183,0.16)]"
-                : status === "absent"
-                    ? "border-[#ff7aa8]/45 bg-[#ff7aa8]/16 text-[#ffb0c8] shadow-[0_0_24px_rgba(255,122,168,0.14)]"
-                    : "border-amber-300/50 bg-amber-300/16 text-amber-300 shadow-[0_0_24px_rgba(252,211,77,0.16)]"
-            : "border-white/10 bg-white/10 text-white/64 hover:border-white/25 hover:text-white")}>
+    const styles = {
+        present: {
+            Icon: CheckCircle2,
+            active: "border-[#bb26ff]/60 bg-gradient-to-r from-[#bb26ff] to-[#d91cff] text-white shadow-[0_0_28px_rgba(187,38,255,0.35)]",
+            inactive: "border-[#bb26ff]/16 bg-[#bb26ff]/[0.035] text-[#f0b7ff] hover:border-[#bb26ff]/40 hover:bg-[#bb26ff]/10",
+        },
+        absent: {
+            Icon: XCircle,
+            active: "border-[#f6a89c]/60 bg-[#f6a89c] text-[#17061d] shadow-[0_0_24px_rgba(246,168,156,0.28)]",
+            inactive: "border-[#f6a89c]/16 bg-[#f6a89c]/[0.035] text-[#f6a89c] hover:border-[#f6a89c]/40 hover:bg-[#f6a89c]/10",
+        },
+        late: {
+            Icon: Clock3,
+            active: "border-cyanGlow/60 bg-cyanGlow text-ink shadow-[0_0_24px_rgba(41,216,255,0.28)]",
+            inactive: "border-cyanGlow/16 bg-cyanGlow/[0.035] text-cyanGlow hover:border-cyanGlow/40 hover:bg-cyanGlow/10",
+        },
+    }[status];
+    const Icon = styles.Icon;
+    return (<button type="button" onClick={onClick} className={cn("inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-2xl border px-4 text-sm font-black uppercase tracking-[0.02em] transition hover:-translate-y-0.5", active ? styles.active : styles.inactive)}>
       <Icon size={15}/>
       {getStatusLabel(status)}
     </button>);
 }
-function AttendanceRecordsPanel({ records, currentPage, totalPages, classFilter, dateFilter, statusFilter, onClassFilterChange, onDateFilterChange, onStatusFilterChange, onApplyFilters, onPreviousPage, onNextPage, }) {
+function AttendanceRecordsPanel({ records, classOptions, currentPage, totalPages, classFilter, dateFilter, statusFilter, onClassFilterChange, onDateFilterChange, onStatusFilterChange, onApplyFilters, onPreviousPage, onNextPage, onUpdateRecord, onDeleteRecord, }) {
+    const [editingRecordId, setEditingRecordId] = useState("");
+    const [editForm, setEditForm] = useState({ status: "present", remarks: "" });
+    const [savingRecordId, setSavingRecordId] = useState("");
+    function startEditingRecord(record) {
+        setEditingRecordId(record.id);
+        setEditForm({
+            status: record.status,
+            remarks: record.remarks ?? "",
+        });
+    }
+    async function saveEditedRecord(record) {
+        setSavingRecordId(record.id);
+        try {
+            await onUpdateRecord(record, editForm);
+            setEditingRecordId("");
+        }
+        catch {
+            // Parent handler already shows the alert.
+        }
+        finally {
+            setSavingRecordId("");
+        }
+    }
     return (<section className="mt-14">
       <div>
         <h2 className="text-5xl font-black leading-none text-[#f0b7ff]">Attendance Records</h2>
@@ -1523,8 +1627,8 @@ function AttendanceRecordsPanel({ records, currentPage, totalPages, classFilter,
             <span className="text-xs font-black uppercase tracking-[0.18em] text-white/58">Class Style</span>
             <select value={classFilter} onChange={(event) => onClassFilterChange(event.target.value)} className="mt-2 h-12 w-full rounded-xl border border-white/10 bg-[#211028] px-4 text-sm font-black text-white outline-none transition focus:border-[#f0b7ff]">
               <option value="all">All Classes</option>
-              {attendanceClasses.map((classItem) => (<option key={classItem.id} value={classItem.id}>
-                  {classItem.name}
+              {classOptions.map((classItem) => (<option key={classItem.id} value={classItem.id}>
+                  {classItem.className}
                 </option>))}
             </select>
           </label>
@@ -1552,28 +1656,56 @@ function AttendanceRecordsPanel({ records, currentPage, totalPages, classFilter,
       </article>
 
       <div className="mt-8 overflow-x-auto">
-        <div className="min-w-[58rem]">
-          <div className="grid grid-cols-[10rem_14rem_10rem_13rem_8rem_1fr] gap-4 px-6 py-4 text-xs font-black uppercase tracking-[0.18em] text-white/70">
+        <div className="min-w-[70rem]">
+          <div className="grid grid-cols-[10rem_15rem_14rem_10rem_1fr_9rem] gap-4 px-6 py-4 text-xs font-black uppercase tracking-[0.18em] text-white/70">
             <span>Date</span>
             <span>Class Name</span>
-            <span>Student ID</span>
             <span>Student Name</span>
             <span>Status</span>
             <span>Remarks</span>
+            <span>Actions</span>
           </div>
 
           <div className="grid gap-3">
-            {records.map((record) => (<article key={record.id} className="grid min-h-16 grid-cols-[10rem_14rem_10rem_13rem_8rem_1fr] items-center gap-4 rounded-xl border border-white/10 bg-white/[0.045] px-6 text-sm font-black text-white/78 shadow-[0_16px_55px_rgba(0,0,0,0.16)]">
-                <span className="text-[#f0b7ff]">{formatAttendanceDate(record.date)}</span>
+            {records.map((record) => {
+            const isEditing = editingRecordId === record.id;
+            return (<article key={record.id} className={cn("grid min-h-16 grid-cols-[10rem_15rem_14rem_10rem_1fr_9rem] items-center gap-4 rounded-xl border border-white/10 bg-white/[0.045] px-6 py-3 text-sm font-black text-white/78 shadow-[0_16px_55px_rgba(0,0,0,0.16)]", isEditing && "border-[#f0b7ff]/45 bg-[#f0b7ff]/[0.06]")}>
+                <span>
+                  <span className="block text-[#f0b7ff]">{formatAttendanceDate(record.date)}</span>
+                  <span className="mt-1 inline-flex rounded-full border border-white/10 px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] text-white/45">
+                    {record.id}
+                  </span>
+                </span>
                 <span className="flex items-center gap-3">
                   <span className="h-8 w-1 rounded-full bg-cyanGlow"/>
                   {record.className}
                 </span>
-                <span className="text-white/58">{record.studentId}</span>
                 <span>{record.studentName}</span>
-                <AttendanceStatusBadge status={record.status}/>
-                <span className="truncate italic text-white/58">{record.remarks || "-"}</span>
-              </article>))}
+                {isEditing ? (<select value={editForm.status} onChange={(event) => setEditForm((current) => ({ ...current, status: event.target.value }))} className="h-11 rounded-xl border border-white/10 bg-[#211028] px-3 text-xs font-black uppercase text-white outline-none transition focus:border-[#f0b7ff]">
+                    <option value="present">Present</option>
+                    <option value="absent">Absent</option>
+                    <option value="late">Late</option>
+                  </select>) : (<AttendanceStatusBadge status={record.status}/>)}
+                {isEditing ? (<input value={editForm.remarks} onChange={(event) => setEditForm((current) => ({ ...current, remarks: event.target.value }))} placeholder="Add remark..." className="h-11 rounded-xl border border-white/10 bg-black/10 px-3 text-sm font-semibold italic text-white outline-none transition placeholder:text-white/34 focus:border-[#f0b7ff]"/>) : (<span className="truncate italic text-white/58">{record.remarks || "-"}</span>)}
+                <span className="flex items-center gap-2">
+                  {isEditing ? (<>
+                      <button type="button" onClick={() => void saveEditedRecord(record)} disabled={savingRecordId === record.id} className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-cyanGlow text-ink transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Save attendance record">
+                        <Save size={17}/>
+                      </button>
+                      <button type="button" onClick={() => setEditingRecordId("")} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 text-white/62 transition hover:border-white/25 hover:text-white" aria-label="Cancel edit">
+                        <X size={17}/>
+                      </button>
+                    </>) : (<>
+                      <button type="button" onClick={() => startEditingRecord(record)} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-cyanGlow/25 bg-cyanGlow/[0.06] text-cyanGlow transition hover:-translate-y-0.5 hover:bg-cyanGlow/12" aria-label="Edit attendance record">
+                        <Edit3 size={17}/>
+                      </button>
+                      <button type="button" onClick={() => void onDeleteRecord(record)} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#ff7aa8]/25 bg-[#ff7aa8]/[0.06] text-[#ffb0c8] transition hover:-translate-y-0.5 hover:bg-[#ff7aa8]/12" aria-label="Delete attendance record">
+                        <Trash2 size={17}/>
+                      </button>
+                    </>)}
+                </span>
+              </article>);
+        })}
           </div>
 
           {records.length === 0 && (<div className="rounded-xl border border-white/10 bg-white/[0.045] px-6 py-10 text-center text-sm font-black text-white/56">

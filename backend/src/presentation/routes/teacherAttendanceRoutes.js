@@ -22,5 +22,10 @@ function createTeacherAttendanceRoutes(attendanceRecordController, authenticateT
     });
     router.get("/", attendanceRecordController.listForTeacher);
     router.post("/", attendanceRecordController.saveSession);
+    router.patch("/record", attendanceRecordController.updateRecord);
+    router.delete("/record", attendanceRecordController.deleteRecord);
+    router.post("/record/delete", attendanceRecordController.deleteRecord);
+    router.patch("/:id", attendanceRecordController.updateRecord);
+    router.delete("/:id", attendanceRecordController.deleteRecord);
     return router;
 }

@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, BadgeCheck, CalendarDays, CheckCircle2, CircleCheck, Clock3, Heart, Save, Sparkles, UserRound, UsersRound, } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, CalendarDays, CheckCircle2, CircleCheck, Clock3, Heart, Sparkles, UserRound, UsersRound, X, } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { brandAssets } from "../assets/brand";
@@ -485,6 +485,9 @@ export function StudentEnrolmentPage() {
         setPhase("steps");
         setErrors({});
     }
+    function closeEnrolment() {
+        navigate("/student-dashboard");
+    }
     if (phase === "success" && submitted) {
         return <EnrolmentSuccess application={submitted}/>;
     }
@@ -493,7 +496,11 @@ export function StudentEnrolmentPage() {
       <div className="fixed inset-0 bg-gradient-to-br from-[#1b071f]/90 via-[#0b020f] to-[#001312]"/>
 
       <main className="relative z-10 mx-auto min-h-screen max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {phase === "start" ? (<EnrolmentStart notice={notice} onStart={startNew} onContinue={continueDraft}/>) : (<>
+        <button type="button" onClick={closeEnrolment} className="fixed right-5 top-5 z-40 inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-[#17091d]/90 text-white/72 shadow-[0_18px_55px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:border-[#f0b7ff]/55 hover:bg-[#2a1230] hover:text-white" aria-label="Close enrolment and return to student dashboard" title="Close enrolment">
+          <X size={24}/>
+        </button>
+
+        {phase === "start" ? (<EnrolmentStart notice={notice} onStart={startNew}/>) : (<>
             <EnrolmentStepper currentStep={step}/>
             <div className="pb-28">
               {step === 1 && (<DanceStyleStep value={data.danceStyleId} error={errors.danceStyleId} onSelect={(danceStyleId) => updateData((current) => ({
@@ -517,19 +524,24 @@ export function StudentEnrolmentPage() {
                 {notice}
               </p>)}
 
-            <StepActions step={step} canSubmit={step !== 6 || data.confirmed} onBack={goBack} onSaveDraft={handleSaveDraft} onNext={goNext}/>
+            <StepActions step={step} canSubmit={step !== 6 || data.confirmed} onBack={goBack} onNext={goNext}/>
           </>)}
       </main>
     </div>);
 }
-function EnrolmentStart({ notice, onStart, onContinue, }) {
+function EnrolmentStart({ notice, onStart, }) {
     return (<section className="grid min-h-[calc(100svh-4rem)] place-items-center">
       <div className="w-full max-w-5xl overflow-hidden rounded-[2rem] border border-white/12 bg-white/[0.065] shadow-[0_32px_110px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
         <div className="grid gap-0 lg:grid-cols-[1fr_24rem]">
           <div className="p-6 sm:p-9 lg:p-12">
-            <span className="inline-flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl border border-[#f0b7ff]/35 bg-black shadow-[0_0_35px_rgba(217,28,255,0.2)]">
-              <img src={brandAssets.logo} alt="Sankalana logo" className="h-full w-full object-cover"/>
-            </span>
+            <div className="inline-flex items-center gap-4">
+              <span className="inline-flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl border border-[#f0b7ff]/35 bg-black shadow-[0_0_35px_rgba(217,28,255,0.2)]">
+                <img src={brandAssets.logo} alt="Sankalana logo" className="h-full w-full object-cover"/>
+              </span>
+              <span className="text-3xl font-black tracking-wide text-[#f0b7ff] drop-shadow-[0_0_22px_rgba(217,28,255,0.28)]">
+                Sankalana
+              </span>
+            </div>
 
             <p className="mt-9 text-xs font-black uppercase tracking-[0.28em] text-cyanGlow">Registration Process</p>
             <h1 className="mt-4 text-5xl font-black leading-none text-[#f0b7ff] sm:text-6xl">
@@ -559,9 +571,6 @@ function EnrolmentStart({ notice, onStart, onContinue, }) {
               <button type="button" onClick={onStart} className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-[#e8a3ff] via-[#c026ff] to-[#e026b4] px-8 text-base font-black text-white shadow-[0_22px_55px_rgba(217,28,255,0.34)] transition hover:-translate-y-0.5">
                 Start Enrolment
                 <ArrowRight size={22}/>
-              </button>
-              <button type="button" onClick={onContinue} className="inline-flex min-h-14 items-center justify-center gap-3 rounded-2xl border border-cyanGlow/45 px-8 text-base font-black text-cyanGlow transition hover:bg-cyanGlow/10">
-                Continue Saved Enrolment
               </button>
             </div>
           </div>
@@ -1042,7 +1051,7 @@ function SummaryRow({ icon: Icon, label, value }) {
       <span className="text-right text-sm font-black text-white">{value}</span>
     </div>);
 }
-function StepActions({ step, canSubmit, onBack, onSaveDraft, onNext, }) {
+function StepActions({ step, canSubmit, onBack, onNext, }) {
     const nextLabel = step === 1
         ? "Next: Select Date & Time"
         : step === 2
@@ -1061,10 +1070,6 @@ function StepActions({ step, canSubmit, onBack, onSaveDraft, onNext, }) {
           Back
         </button>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <button type="button" onClick={onSaveDraft} className="inline-flex min-h-12 items-center justify-center gap-3 rounded-xl border border-white/10 px-7 text-sm font-black text-white/72 transition hover:border-white/30 hover:text-white">
-            <Save size={18}/>
-            Save Draft
-          </button>
           <button type="button" onClick={onNext} disabled={!canSubmit} className="inline-flex min-h-12 items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-[#e8a3ff] via-[#c026ff] to-[#e026b4] px-8 text-sm font-black text-white shadow-[0_16px_45px_rgba(217,28,255,0.34)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0">
             {nextLabel}
             <ArrowRight size={20}/>

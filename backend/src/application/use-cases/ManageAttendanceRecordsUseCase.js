@@ -12,6 +12,10 @@ class ManageAttendanceRecordsUseCase {
         const records = await this.attendanceRecordRepository.findByTeacherId(teacherId);
         return records.map((record) => record.toJSON());
     }
+    async listForStudent(studentId) {
+        const records = await this.attendanceRecordRepository.findByStudentId(studentId);
+        return records.map((record) => record.toJSON());
+    }
     async saveSession(teacherId, dto) {
         const normalized = {
             classId: dto.classId?.trim() ?? "",
@@ -36,6 +40,42 @@ class ManageAttendanceRecordsUseCase {
         const savedRecords = await this.attendanceRecordRepository.replaceSession(teacherId, normalized.classId, normalized.date, records);
         return savedRecords.map((record) => record.toJSON());
     }
+    async updateRecord(teacherId, id, dto) {
+        const normalizedId = id?.trim() ?? "";
+        const normalizedStatus = dto.status?.trim() ?? "";
+        const normalizedRemarks = dto.remarks?.trim() ?? "";
+        const errors = {};
+        if (!normalizedId) {
+            errors.id = "Attendance record is required.";
+        }
+        if (!normalizedStatus || !attendanceStatuses.includes(normalizedStatus)) {
+            errors.status = "Attendance status is required.";
+        }
+        if (Object.keys(errors).length > 0) {
+            throw new ApplicationError_1.ValidationError(errors);
+        }
+        const record = await this.attendanceRecordRepository.updateRecord(teacherId, normalizedId, {
+            status: normalizedStatus,
+            remarks: normalizedRemarks,
+        });
+        if (!record) {
+            throw new ApplicationError_1.NotFoundError("Attendance record not found.");
+        }
+        return record.toJSON();
+    }
+    async deleteRecord(teacherId, id) {
+        const normalizedId = id?.trim() ?? "";
+        if (!normalizedId) {
+            throw new ApplicationError_1.ValidationError({
+                id: "Attendance record is required.",
+            });
+        }
+        const deleted = await this.attendanceRecordRepository.deleteRecord(teacherId, normalizedId);
+        if (!deleted) {
+            throw new ApplicationError_1.NotFoundError("Attendance record not found.");
+        }
+        return { id: normalizedId };
+    }
     validate(dto) {
         const errors = {};
         if (!dto.classId) {
@@ -47,10 +87,10 @@ class ManageAttendanceRecordsUseCase {
         if (!dto.date || !/^\d{4}-\d{2}-\d{2}$/.test(dto.date)) {
             errors.date = "A valid attendance date is required.";
         }
-        if (!Array.isArray(dto.records) || dto.records.length === 0) {
-            errors.records = "At least one attendance record is required.";
+        if (!Array.isArray(dto.records)) {
+            errors.records = "Attendance records must be a list.";
         }
-        else {
+        else if (dto.records.length > 0) {
             dto.records.forEach((record, index) => {
                 if (!record.studentId?.trim()) {
                     errors[`records.${index}.studentId`] = "Student ID is required.";

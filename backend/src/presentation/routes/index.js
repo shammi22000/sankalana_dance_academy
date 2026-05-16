@@ -5,6 +5,7 @@ const express_1 = require("express");
 const adminRoutes_1 = require("./adminRoutes");
 const authRoutes_1 = require("./authRoutes");
 const classRoutes_1 = require("./classRoutes");
+const studentAttendanceRoutes_1 = require("./studentAttendanceRoutes");
 const contactRoutes_1 = require("./contactRoutes");
 const studentEnrolmentRoutes_1 = require("./studentEnrolmentRoutes");
 const studentRegistrationRoutes_1 = require("./studentRegistrationRoutes");
@@ -29,6 +30,7 @@ function createApiRoutes(contactController, studentRegistrationController, teach
     router.use("/admin", (0, adminRoutes_1.createAdminRoutes)(adminRegistrationController, authenticateAdminUseCase));
     router.use("/classes", (0, classRoutes_1.createClassRoutes)(teacherClassController));
     router.use("/teacher/classes", (0, teacherClassRoutes_1.createTeacherClassRoutes)(teacherClassController, authenticateTeacherUseCase));
+    router.use("/student/attendance", (0, studentAttendanceRoutes_1.createStudentAttendanceRoutes)(attendanceRecordController, authenticateStudentUseCase));
     router.use("/student/enrolments", (0, studentEnrolmentRoutes_1.createStudentEnrolmentRoutes)(enrolmentApplicationController, authenticateStudentUseCase));
     router.use("/teacher/enrolments", (0, teacherEnrolmentRoutes_1.createTeacherEnrolmentRoutes)(enrolmentApplicationController, authenticateTeacherUseCase));
     router.use("/teacher/attendance", (0, teacherAttendanceRoutes_1.createTeacherAttendanceRoutes)(attendanceRecordController, authenticateTeacherUseCase));

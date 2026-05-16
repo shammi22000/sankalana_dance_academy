@@ -5,8 +5,6 @@ export const navLinks = [
     { label: "Dance Forms", href: "#disciplines" },
     { label: "Events", href: "#events" },
     { label: "Learning Material", href: "#learning-material" },
-    { label: "Enroll", href: "#enroll" },
-    { label: "Location", href: "#contact" },
 ];
 export const storyImages = danceImages.story;
 export const disciplines = [
