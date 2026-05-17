@@ -18,6 +18,10 @@ class ManageEnrolmentApplicationsUseCase {
         const applications = await this.enrolmentApplicationRepository.findByTeacherId(teacherId);
         return applications.map((application) => application.toJSON());
     }
+    async listAll() {
+        const applications = await this.enrolmentApplicationRepository.findAll();
+        return applications.map((application) => application.toJSON());
+    }
     async create(studentId, dto) {
         const student = await this.studentRegistrationRepository.findById(studentId);
         if (!student) {

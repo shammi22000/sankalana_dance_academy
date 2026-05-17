@@ -60,6 +60,11 @@ class MongoTeacherRegistrationRepository {
         const result = await collection.findOneAndUpdate({ id }, { $set: { passwordHash } }, { returnDocument: "after" });
         return this.toEntity(result);
     }
+    async updateProfile(id, profile) {
+        const collection = await this.database.collection("teacherRegistrations");
+        const result = await collection.findOneAndUpdate({ id }, { $set: profile }, { returnDocument: "after" });
+        return this.toEntity(result);
+    }
     toEntity(document) {
         if (!document) {
             return null;

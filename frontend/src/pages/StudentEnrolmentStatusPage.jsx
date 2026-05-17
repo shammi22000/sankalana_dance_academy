@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, BadgeCheck, CheckCircle2, Edit3, Flag, Hourglass, Sparkles, UserRound, XCircle, } from "lucide-react";
+import { ArrowRight, BadgeCheck, BadgePlus, CheckCircle2, Edit3, Flag, Grid2X2, Hourglass, Sparkles, UserRound, X, XCircle, } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { danceImages } from "../assets/danceImages";
@@ -41,8 +41,11 @@ export function StudentEnrolmentStatusPage() {
         saveDraft(application.data, 1);
         navigate("/student/enrolment", { state: { resumeDraft: true } });
     }
+    function closeStatusPage() {
+        navigate("/student-dashboard");
+    }
     if (!application) {
-        return (<StatusPageShell>
+        return (<StatusPageShell onClose={closeStatusPage}>
         <section className="mx-auto grid min-h-[calc(100svh-5rem)] max-w-3xl place-items-center">
           <div className="rounded-[2rem] border border-white/12 bg-white/[0.065] p-8 text-center shadow-[0_32px_110px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
             <Sparkles className="mx-auto text-[#f0b7ff]" size={50}/>
@@ -50,7 +53,8 @@ export function StudentEnrolmentStatusPage() {
             <p className="mx-auto mt-4 max-w-xl text-base font-semibold leading-7 text-white/66">
               Start a new enrolment to track your application progress here.
             </p>
-            <Link to="/student/enrolment" className="mt-7 inline-flex min-h-12 items-center justify-center rounded-xl bg-gradient-to-r from-[#e8a3ff] to-[#e026b4] px-7 text-sm font-black text-white">
+            <Link to="/student/enrolment" className="mt-7 inline-flex min-h-12 items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-[#e8a3ff] via-[#c026ff] to-[#e026b4] px-7 text-sm font-black text-white shadow-[0_18px_45px_rgba(217,28,255,0.3)] transition hover:-translate-y-0.5">
+              <BadgePlus size={18}/>
               Start Enrolment
             </Link>
           </div>
@@ -63,7 +67,7 @@ export function StudentEnrolmentStatusPage() {
     const isPending = application.status === "Pending Review";
     const isApproved = application.status === "Approved";
     const isRejected = application.status === "Rejected";
-    return (<StatusPageShell>
+    return (<StatusPageShell onClose={closeStatusPage}>
       <section className="mx-auto max-w-7xl pb-12">
         <div className="max-w-3xl">
           <h1 className="text-4xl font-black leading-tight text-[#f0b7ff] sm:text-5xl">My Enrolment Progress</h1>
@@ -129,27 +133,55 @@ export function StudentEnrolmentStatusPage() {
             </p>
           </article>)}
 
-        <div className="mt-9 grid gap-4 sm:grid-cols-3">
-          <Link to="/student/enrolment" className="inline-flex min-h-13 items-center justify-center gap-3 rounded-2xl border border-white/12 px-6 text-sm font-black text-white/72 transition hover:border-[#f0b7ff]/45 hover:text-white">
-            <ArrowLeft size={19}/>
-            Back to Enrol
-          </Link>
-          {(isPending || isRejected) && (<button type="button" onClick={handleEditApplication} className="inline-flex min-h-13 items-center justify-center gap-3 rounded-2xl border border-cyanGlow/50 px-6 text-sm font-black text-cyanGlow transition hover:bg-cyanGlow/10">
-              <Edit3 size={18}/>
-              Edit Application
-            </button>)}
-          <Link to="/student-dashboard" className="inline-flex min-h-13 items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-[#e8a3ff] to-[#e026b4] px-6 text-sm font-black text-white">
-            Go to Dashboard
-            <ArrowRight size={19}/>
-          </Link>
+        <div className="mt-9 rounded-[1.35rem] border border-white/10 bg-[#211028]/88 p-4 shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+          <div className={cn("grid gap-3", isPending || isRejected ? "lg:grid-cols-3" : "lg:grid-cols-2")}>
+            {(isPending || isRejected) && (<button type="button" onClick={handleEditApplication} className="group flex min-h-24 items-center gap-4 rounded-2xl border border-cyanGlow/45 bg-cyanGlow/10 p-5 text-left transition hover:-translate-y-0.5 hover:border-cyanGlow hover:bg-cyanGlow/16">
+                <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyanGlow text-[#061214] shadow-[0_12px_34px_rgba(41,216,255,0.22)]">
+                  <Edit3 size={20}/>
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black text-cyanGlow">Edit Application</span>
+                  <span className="mt-1 block text-xs font-semibold leading-5 text-white/56">
+                    Update your details before the final decision.
+                  </span>
+                </span>
+              </button>)}
+
+            <Link to="/student/enrolment" className="group flex min-h-24 items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.055] p-5 text-left transition hover:-translate-y-0.5 hover:border-[#f0b7ff]/45 hover:bg-white/[0.08]">
+              <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#f0b7ff]/16 text-[#f0b7ff]">
+                <BadgePlus size={20}/>
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-black text-[#f4e7fb]">New Enrolment</span>
+                <span className="mt-1 block text-xs font-semibold leading-5 text-white/52">
+                  Choose another class, teacher, or time slot.
+                </span>
+              </span>
+            </Link>
+
+            <Link to="/student-dashboard" className="group flex min-h-24 items-center gap-4 rounded-2xl bg-gradient-to-r from-[#e8a3ff] via-[#c026ff] to-[#e026b4] p-5 text-left text-white shadow-[0_18px_45px_rgba(217,28,255,0.3)] transition hover:-translate-y-0.5">
+              <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/18 text-white">
+                <Grid2X2 size={20}/>
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-black">Student Dashboard</span>
+                <span className="mt-1 flex items-center gap-2 text-xs font-semibold leading-5 text-white/76">
+                  Return to your classes and profile <ArrowRight size={15}/>
+                </span>
+              </span>
+            </Link>
+          </div>
         </div>
       </section>
     </StatusPageShell>);
 }
-function StatusPageShell({ children }) {
+function StatusPageShell({ children, onClose }) {
     return (<div className="min-h-screen overflow-hidden bg-[#0b020f] text-white">
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_12%_12%,rgba(199,45,255,0.23),transparent_28rem),radial-gradient(circle_at_84%_84%,rgba(34,211,238,0.18),transparent_26rem)]"/>
       <div className="fixed inset-0 bg-gradient-to-br from-[#1b071f]/90 via-[#0b020f] to-[#001312]"/>
+      <button type="button" onClick={onClose} className="fixed right-5 top-5 z-30 inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-[#17091d]/90 text-white/72 shadow-[0_18px_55px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:border-[#f0b7ff]/55 hover:bg-[#2a1230] hover:text-white" aria-label="Close enrolment progress and return to student dashboard" title="Close">
+        <X size={21}/>
+      </button>
       <main className="relative z-10 px-4 py-10 sm:px-6 lg:px-8">{children}</main>
     </div>);
 }

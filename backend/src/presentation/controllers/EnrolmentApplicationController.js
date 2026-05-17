@@ -42,6 +42,18 @@ class EnrolmentApplicationController {
                 next(error);
             }
         };
+        this.listAllForAdmin = async (_request, response, next) => {
+            try {
+                const applications = await this.manageEnrolmentApplicationsUseCase.listAll();
+                response.json({
+                    success: true,
+                    data: applications,
+                });
+            }
+            catch (error) {
+                next(error);
+            }
+        };
         this.updateTeacherDecision = async (request, response, next) => {
             try {
                 const application = await this.manageEnrolmentApplicationsUseCase.updateTeacherDecision(this.getTeacherId(request), request.params.applicationId, request.body);

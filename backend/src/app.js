@@ -30,6 +30,7 @@ const ContactController_1 = require("./presentation/controllers/ContactControlle
 const EnrolmentApplicationController_1 = require("./presentation/controllers/EnrolmentApplicationController");
 const StudentRegistrationController_1 = require("./presentation/controllers/StudentRegistrationController");
 const TeacherClassController_1 = require("./presentation/controllers/TeacherClassController");
+const TeacherProfileController_1 = require("./presentation/controllers/TeacherProfileController");
 const TeacherRegistrationController_1 = require("./presentation/controllers/TeacherRegistrationController");
 const routes_1 = require("./presentation/routes");
 const errorHandler_1 = require("./presentation/middlewares/errorHandler");
@@ -59,11 +60,12 @@ const authenticateAdminUseCase = new AuthenticateAdminUseCase_1.AuthenticateAdmi
 const authController = new AuthController_1.AuthController(authenticateStudentUseCase, authenticateTeacherUseCase, authenticateAdminUseCase);
 const manageRegistrationApprovalsUseCase = new ManageRegistrationApprovalsUseCase_1.ManageRegistrationApprovalsUseCase(studentRegistrationRepository, teacherRegistrationRepository);
 const adminRegistrationController = new AdminRegistrationController_1.AdminRegistrationController(manageRegistrationApprovalsUseCase, createTeacherRegistrationUseCase);
+const teacherProfileController = new TeacherProfileController_1.TeacherProfileController(manageRegistrationApprovalsUseCase);
 app.use((0, cors_1.default)({
     origin: env_1.env.corsOrigins,
 }));
 app.use(express_1.default.json({ limit: "2mb" }));
-app.use("/api", (0, routes_1.createApiRoutes)(contactController, studentRegistrationController, teacherRegistrationController, authController, adminRegistrationController, authenticateAdminUseCase, teacherClassController, authenticateTeacherUseCase, enrolmentApplicationController, authenticateStudentUseCase, attendanceRecordController));
+app.use("/api", (0, routes_1.createApiRoutes)(contactController, studentRegistrationController, teacherRegistrationController, authController, adminRegistrationController, authenticateAdminUseCase, teacherClassController, authenticateTeacherUseCase, enrolmentApplicationController, authenticateStudentUseCase, attendanceRecordController, teacherProfileController));
 app.use(notFoundHandler_1.notFoundHandler);
 app.use(errorHandler_1.errorHandler);
 exports.default = app;

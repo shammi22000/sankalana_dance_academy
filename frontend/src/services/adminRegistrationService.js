@@ -43,6 +43,16 @@ export async function getStudentRegistrations() {
     }
     return result.data;
 }
+export async function getAdminEnrolments() {
+    const response = await fetch(`${API_BASE_URL}/admin/enrolments`, {
+        headers: getAdminHeaders(),
+    });
+    const result = (await response.json().catch(() => null));
+    if (!response.ok || !result?.success || !result.data) {
+        throw new Error(result?.error?.message ?? "Unable to load enrolments.");
+    }
+    return result.data;
+}
 export async function createTeacherRegistration(payload) {
     const response = await fetch(`${API_BASE_URL}/admin/teacher-registrations`, {
         method: "POST",

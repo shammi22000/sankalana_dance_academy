@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createAdminRoutes = createAdminRoutes;
 const express_1 = require("express");
-function createAdminRoutes(adminRegistrationController, authenticateAdminUseCase) {
+function createAdminRoutes(adminRegistrationController, authenticateAdminUseCase, enrolmentApplicationController) {
     const router = (0, express_1.Router)();
     router.use((request, response, next) => {
         const authorizationHeader = request.header("authorization") ?? "";
@@ -19,6 +19,7 @@ function createAdminRoutes(adminRegistrationController, authenticateAdminUseCase
         next();
     });
     router.get("/registrations/pending", adminRegistrationController.listPendingRegistrations);
+    router.get("/enrolments", enrolmentApplicationController.listAllForAdmin);
     router.get("/student-registrations", adminRegistrationController.listStudentRegistrations);
     router.post("/teacher-registrations", adminRegistrationController.createTeacherRegistration);
     router.get("/teacher-registrations", adminRegistrationController.listTeacherRegistrations);

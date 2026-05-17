@@ -1,4 +1,4 @@
-import { BadgeCheck, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardList, Clock3, Edit3, FileText, Grid2X2, ListFilter, LogOut, Mail, MapPin, Phone, Plus, Save, Search, Settings, Sparkles, Star, Theater, Trash2, Upload, UserRound, UsersRound, X, XCircle, } from "lucide-react";
+import { BadgeCheck, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock3, Edit3, FileText, Grid2X2, ListFilter, LogOut, Mail, MapPin, Phone, Plus, Save, Search, Sparkles, Star, Trash2, Upload, UserRound, UsersRound, X, XCircle, } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Navigate, useNavigate } from "react-router-dom";
@@ -7,6 +7,7 @@ import { PageHeader } from "../components/PageHeader";
 import { attendanceRecordsCacheKey, getTeacherAttendanceRecords, saveTeacherAttendanceSession, updateTeacherAttendanceRecord, } from "../services/attendanceService";
 import { getTeacherEnrolments, submittedEnrolmentApplicationsCacheKey, submittedEnrolmentCacheKey, updateTeacherEnrolmentStatus, } from "../services/enrolmentService";
 import { createTeacherClass, deleteTeacherClass, getMyTeacherClasses, teacherClassCacheKey, updateTeacherClass, } from "../services/teacherClassService";
+import { updateTeacherProfile } from "../services/teacherProfileService";
 import { showConfirmAlert, showErrorAlert, showSuccessAlert } from "../utils/alerts";
 import { cn } from "../utils/cn";
 const sessionStorageKey = "sankalanaTeacherSession";
@@ -16,6 +17,11 @@ const submittedEnrolmentStorageKey = submittedEnrolmentCacheKey;
 const submittedEnrolmentApplicationsStorageKey = submittedEnrolmentApplicationsCacheKey;
 const classDayOptions = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const attendanceStatusOptions = ["present", "absent", "late"];
+const danceStyleOptions = ["Kandyan Dancing", "Low Country Dancing", "Sabaragamu", "Contemporary"];
+const maxAvatarFileSize = 1000000;
+const avatarFileTypes = ["image/png", "image/jpeg", "image/webp"];
+const profileInputClass = "min-h-12 w-full rounded-xl border border-white/10 bg-[#0b0310]/88 px-4 py-3 text-sm font-semibold text-white outline-none transition placeholder:text-white/35 focus:border-[#f0b7ff]/60 focus:ring-2 focus:ring-[#f0b7ff]/20";
+const profileLabelClass = "text-xs font-black uppercase tracking-[0.14em] text-[#f0b7ff]";
 function getStoredTeacherSession() {
     const storedSession = localStorage.getItem(sessionStorageKey);
     if (!storedSession) {
@@ -214,10 +220,73 @@ function formatClassDate(value) {
         year: "numeric",
     });
 }
+function getUniqueApprovedStudentIds(applications) {
+    return new Set(applications
+        .filter((application) => application.status === "Approved")
+        .map((application) => application.studentId || application.applicationId)
+        .filter(Boolean));
+}
+function getDashboardAttendanceStats(records, approvedStudentIds, classIds) {
+    const markedStudentIds = new Set(records
+        .filter((record) => attendanceStatusOptions.includes(record.status))
+        .filter((record) => classIds.size === 0 || classIds.has(record.classId))
+        .map((record) => record.studentId)
+        .filter((studentId) => approvedStudentIds.has(studentId)));
+    const totalStudents = approvedStudentIds.size;
+    return {
+        marked: markedStudentIds.size,
+        total: totalStudents,
+        percentage: totalStudents > 0 ? Math.round((markedStudentIds.size / totalStudents) * 100) : 0,
+    };
+}
+function formatDashboardCount(value) {
+    return String(value).padStart(2, "0");
+}
 export function TeacherDashboardPage() {
     const navigate = useNavigate();
     const [activeSection, setActiveSection] = useState("Dashboard");
     const authentication = getStoredTeacherSession();
+    const [teacherProfile, setTeacherProfile] = useState(() => authentication?.teacher ?? null);
+    const [isProfileEditing, setIsProfileEditing] = useState(false);
+    const [isProfileSaving, setIsProfileSaving] = useState(false);
+    const [dashboardClasses, setDashboardClasses] = useState(() => authentication?.teacher
+        ? readCreatedClasses().filter((classItem) => isClassOwnedByTeacher(classItem, authentication.teacher))
+        : []);
+    const [dashboardApplications, setDashboardApplications] = useState(() => authentication?.teacher ? getApplicationsForTeacher(authentication.teacher) : []);
+    const [dashboardAttendanceRecords, setDashboardAttendanceRecords] = useState(() => readAttendanceRecords());
+    useEffect(() => {
+        if (authentication?.teacher) {
+            setTeacherProfile(authentication.teacher);
+        }
+    }, [authentication?.teacher?.id]);
+    useEffect(() => {
+        const currentTeacher = teacherProfile ?? authentication?.teacher;
+        if (!currentTeacher) {
+            return;
+        }
+        let isMounted = true;
+        async function loadDashboardData() {
+            const [classesResult, applicationsResult, attendanceResult] = await Promise.allSettled([
+                getMyTeacherClasses(),
+                getTeacherEnrolments(),
+                getTeacherAttendanceRecords(),
+            ]);
+            if (!isMounted) {
+                return;
+            }
+            setDashboardClasses(classesResult.status === "fulfilled"
+                ? classesResult.value
+                : readCreatedClasses().filter((classItem) => isClassOwnedByTeacher(classItem, currentTeacher)));
+            setDashboardApplications(applicationsResult.status === "fulfilled"
+                ? applicationsResult.value
+                : getApplicationsForTeacher(currentTeacher));
+            setDashboardAttendanceRecords(attendanceResult.status === "fulfilled" ? attendanceResult.value : readAttendanceRecords());
+        }
+        void loadDashboardData();
+        return () => {
+            isMounted = false;
+        };
+    }, [authentication?.teacher?.id, teacherProfile?.id, teacherProfile?.danceStyles]);
     if (!authentication) {
         return <Navigate to="/teacher-login" replace/>;
     }
@@ -225,51 +294,22 @@ export function TeacherDashboardPage() {
         localStorage.removeItem(sessionStorageKey);
         navigate("/teacher-login", { replace: true });
     }
-    const teacher = authentication.teacher;
+    const teacher = teacherProfile ?? authentication.teacher;
     const firstName = teacher.fullName.split(" ")[0] || teacher.fullName;
     const instructorTitle = teacher.experienceYears >= 5 ? "Senior Instructor" : "Dance Instructor";
     const avatarSrc = teacher.avatarImageDataUrl || danceImages.heroCarousel[0].src;
+    const dashboardClassIds = new Set(dashboardClasses.map((classItem) => classItem.id));
+    const approvedDashboardApplications = dashboardApplications.filter((application) => application.status === "Approved" &&
+        (dashboardClassIds.size === 0 || dashboardClassIds.has(application.data.slotId)));
+    const dashboardStudentIds = getUniqueApprovedStudentIds(approvedDashboardApplications);
+    const dashboardAttendanceStats = getDashboardAttendanceStats(dashboardAttendanceRecords, dashboardStudentIds, dashboardClassIds);
+    const dashboardWeeklySessions = dashboardClasses.reduce((total, classItem) => total + (Array.isArray(classItem.days) ? classItem.days.length : 0), 0);
     const sidebarItems = [
         { label: "Dashboard", icon: Grid2X2 },
         { label: "My Info", icon: UserRound },
         { label: "My Classes", icon: Sparkles },
         { label: "Enrol Requests", icon: BadgeCheck },
         { label: "Attendance", icon: ClipboardCheck },
-        { label: "Schedule", icon: CalendarDays },
-        { label: "Performances", icon: Theater },
-        { label: "Settings", icon: Settings },
-    ];
-    const scheduleItems = [
-        {
-            title: "Advanced Contemporary",
-            time: "04:00 PM - 05:30 PM",
-            studio: "Studio A",
-            students: 24,
-            status: "Upcoming",
-            accent: "bg-[#f0b7ff]",
-        },
-        {
-            title: teacher.danceStyles || "Classical Foundations",
-            time: "06:00 PM - 07:00 PM",
-            studio: "Studio C",
-            students: 18,
-            status: "Scheduled",
-            accent: "bg-cyanGlow",
-        },
-        {
-            title: "Morning Stretch & Barre",
-            time: "09:00 AM - 10:30 AM",
-            studio: "Main Stage",
-            students: 32,
-            status: "Completed",
-            accent: "bg-white/15",
-            muted: true,
-        },
-    ];
-    const adminTasks = [
-        { label: "Submit Performance Scores", icon: ClipboardList },
-        { label: "Review Enrollment Requests", icon: BadgeCheck },
-        { label: "Update Weekly Schedule", icon: CalendarDays },
     ];
     const profileStats = [
         { label: "Role", value: teacher.accountRole },
@@ -290,6 +330,21 @@ export function TeacherDashboardPage() {
         { label: "Portfolio File", value: teacher.portfolioFileName || "Not uploaded" },
         { label: "Member Since", value: new Date(teacher.createdAt).toLocaleDateString() },
     ];
+    async function handleTeacherProfileSave(payload) {
+        setIsProfileSaving(true);
+        try {
+            const updatedTeacher = await updateTeacherProfile(payload);
+            setTeacherProfile(updatedTeacher);
+            setIsProfileEditing(false);
+            await showSuccessAlert("Profile Updated", "Your teacher profile has been saved.");
+        }
+        catch (error) {
+            await showErrorAlert("Profile Not Saved", error instanceof Error ? error.message : "Unable to update your teacher profile.");
+        }
+        finally {
+            setIsProfileSaving(false);
+        }
+    }
     return (<div className="min-h-screen bg-black text-white">
       <PageHeader ctaLabel="Logout" onCtaClick={handleLogout}/>
 
@@ -329,15 +384,21 @@ export function TeacherDashboardPage() {
                   </p>
                 </div>
 
-                <span className="inline-flex w-fit items-center gap-3 rounded-full border border-cyanGlow/35 bg-cyanGlow/5 px-6 py-4 text-sm font-black uppercase tracking-[0.12em] text-cyanGlow">
-                  <span className="h-2.5 w-2.5 rounded-full bg-cyanGlow"/>
-                  {teacher.applicationStatus}
-                </span>
-              </div>
-
-              <div className="mt-12 grid gap-7 xl:grid-cols-[24rem_1fr]">
-                <article className="rounded-[1.75rem] border border-white/[0.12] bg-white/[0.055] p-8 text-center shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-xl">
-                  <div className="relative mx-auto h-32 w-32 rounded-full border-4 border-[#f0b7ff] p-1 shadow-[0_0_40px_rgba(240,183,255,0.34)]">
+	                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+	                  <span className="inline-flex w-fit items-center gap-3 rounded-full border border-cyanGlow/35 bg-cyanGlow/5 px-6 py-4 text-sm font-black uppercase tracking-[0.12em] text-cyanGlow">
+	                    <span className="h-2.5 w-2.5 rounded-full bg-cyanGlow"/>
+	                    {teacher.applicationStatus}
+	                  </span>
+	                  <button type="button" onClick={() => setIsProfileEditing((current) => !current)} disabled={isProfileSaving} className="inline-flex min-h-13 items-center justify-center gap-3 rounded-full border border-[#f0b7ff]/35 bg-[#f0b7ff]/10 px-6 text-sm font-black text-[#f0b7ff] transition hover:border-[#f0b7ff]/70 hover:bg-[#f0b7ff]/16 hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
+	                    {isProfileEditing ? <X size={18}/> : <Edit3 size={18}/>}
+	                    {isProfileEditing ? "Cancel Edit" : "Edit Profile"}
+	                  </button>
+	                </div>
+	              </div>
+	
+	              {isProfileEditing ? (<TeacherProfileEditForm teacher={teacher} isSaving={isProfileSaving} onCancel={() => setIsProfileEditing(false)} onSubmit={handleTeacherProfileSave}/>) : (<div className="mt-12 grid gap-7 xl:grid-cols-[24rem_1fr]">
+	                <article className="rounded-[1.75rem] border border-white/[0.12] bg-white/[0.055] p-8 text-center shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-xl">
+	                  <div className="relative mx-auto h-32 w-32 rounded-full border-4 border-[#f0b7ff] p-1 shadow-[0_0_40px_rgba(240,183,255,0.34)]">
                     <img src={avatarSrc} alt="" className="h-full w-full rounded-full object-cover"/>
                     <span className="absolute bottom-1 right-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-cyanGlow text-ink">
                       <Star size={17} fill="currentColor"/>
@@ -411,19 +472,19 @@ export function TeacherDashboardPage() {
                           {day}
                         </span>))}
                     </div>
-                  </article>
-                </div>
-              </div>
-            </section>) : activeSection === "My Classes" ? (<TeacherClassesSection teacher={teacher} onMarkAttendance={() => setActiveSection("Attendance")}/>) : activeSection === "Enrol Requests" ? (<TeacherEnrolmentRequestsSection teacher={teacher}/>) : activeSection === "Attendance" ? (<TeacherAttendanceSection teacher={teacher}/>) : (<section className="relative z-10 mx-auto max-w-7xl">
+	                  </article>
+	                </div>
+	              </div>)}
+	            </section>) : activeSection === "My Classes" ? (<TeacherClassesSection teacher={teacher} onMarkAttendance={() => setActiveSection("Attendance")}/>) : activeSection === "Enrol Requests" ? (<TeacherEnrolmentRequestsSection teacher={teacher}/>) : activeSection === "Attendance" ? (<TeacherAttendanceSection teacher={teacher}/>) : (<section className="relative z-10 mx-auto max-w-7xl">
             <div className="flex flex-col gap-7 xl:flex-row xl:items-start xl:justify-between">
               <div>
                 <h1 className="text-5xl font-black leading-none text-[#f4e7fb] sm:text-6xl">
                   Welcome back, {firstName}.
-                </h1>
-                <p className="mt-5 max-w-3xl text-xl font-semibold leading-9 text-white/[0.62]">
-                  Ready for today's rhythmic energy? You have 4 classes scheduled.
-                </p>
-              </div>
+	                </h1>
+	                <p className="mt-5 max-w-3xl text-xl font-semibold leading-9 text-white/[0.62]">
+	                  You have {dashboardClasses.length} {dashboardClasses.length === 1 ? "class" : "classes"} and {dashboardStudentIds.size} approved {dashboardStudentIds.size === 1 ? "student" : "students"} in your teaching workspace.
+	                </p>
+	              </div>
 
               <div className="flex flex-col gap-4 sm:flex-row">
                 <button type="button" onClick={() => setActiveSection("Attendance")} className="inline-flex min-h-16 items-center justify-center gap-4 rounded-full border border-cyanGlow/45 bg-cyanGlow/5 px-8 text-base font-black text-cyanGlow shadow-[0_18px_55px_rgba(41,216,255,0.12)] transition hover:bg-cyanGlow/10">
@@ -437,121 +498,223 @@ export function TeacherDashboardPage() {
               </div>
             </div>
 
-            <div className="mt-12 grid gap-7 xl:grid-cols-3">
-              <article className="rounded-[1.75rem] border border-white/[0.12] bg-white/[0.055] p-8 shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-xl">
-                <CalendarDays className="text-[#f0b7ff]" size={39}/>
-                <p className="mt-8 text-xs font-black uppercase tracking-[0.24em] text-white/60">
-                  Today's Classes
-                </p>
-                <p className="mt-2 text-6xl font-black text-[#f4e7fb]">04</p>
-                <p className="mt-4 text-base font-black text-[#f0b7ff]">Next class in 45 mins</p>
-              </article>
-
-              <article className="rounded-[1.75rem] border border-white/[0.12] bg-white/[0.055] p-8 shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-xl">
-                <UsersRound className="text-cyanGlow" size={39}/>
-                <p className="mt-8 text-xs font-black uppercase tracking-[0.24em] text-white/60">
-                  Total Students
-                </p>
-                <p className="mt-2 text-6xl font-black text-[#f4e7fb]">128</p>
-                <p className="mt-4 text-base font-black text-cyanGlow">+12 this month</p>
-              </article>
-
-              <article className="rounded-[1.75rem] border border-white/[0.12] bg-white/[0.055] p-8 shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-xl">
-                <ClipboardCheck className="text-[#ff9edc]" size={39}/>
-                <p className="mt-8 text-xs font-black uppercase tracking-[0.24em] text-white/60">
-                  Attendance Marked
-                </p>
-                <p className="mt-2 text-6xl font-black text-[#f4e7fb]">75%</p>
-                <p className="mt-4 text-base font-black text-[#ff9edc]">2 classes remaining</p>
-              </article>
+	            <div className="mt-12 grid gap-7 xl:grid-cols-3">
+	              <article className="rounded-[1.75rem] border border-white/[0.12] bg-white/[0.055] p-8 shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-xl">
+	                <Sparkles className="text-[#f0b7ff]" size={39}/>
+	                <p className="mt-8 text-xs font-black uppercase tracking-[0.24em] text-white/60">
+	                  My Classes
+	                </p>
+	                <p className="mt-2 text-6xl font-black text-[#f4e7fb]">{formatDashboardCount(dashboardClasses.length)}</p>
+	                <p className="mt-4 text-base font-black text-[#f0b7ff]">
+	                  {dashboardWeeklySessions} weekly {dashboardWeeklySessions === 1 ? "session" : "sessions"}
+	                </p>
+	              </article>
+	
+	              <article className="rounded-[1.75rem] border border-white/[0.12] bg-white/[0.055] p-8 shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-xl">
+	                <UsersRound className="text-cyanGlow" size={39}/>
+	                <p className="mt-8 text-xs font-black uppercase tracking-[0.24em] text-white/60">
+	                  Total Students
+	                </p>
+	                <p className="mt-2 text-6xl font-black text-[#f4e7fb]">{formatDashboardCount(dashboardStudentIds.size)}</p>
+	                <p className="mt-4 text-base font-black text-cyanGlow">
+	                  Approved across your classes
+	                </p>
+	              </article>
+	
+	              <article className="rounded-[1.75rem] border border-white/[0.12] bg-white/[0.055] p-8 shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-xl">
+	                <ClipboardCheck className="text-[#ff9edc]" size={39}/>
+	                <p className="mt-8 text-xs font-black uppercase tracking-[0.24em] text-white/60">
+	                  Attendance Marked
+	                </p>
+	                <p className="mt-2 text-6xl font-black text-[#f4e7fb]">{dashboardAttendanceStats.percentage}%</p>
+	                <p className="mt-4 text-base font-black text-[#ff9edc]">
+	                  {dashboardAttendanceStats.marked}/{dashboardAttendanceStats.total} students recorded
+	                </p>
+	              </article>
             </div>
 
-            <div className="mt-12 grid gap-7 xl:grid-cols-[1fr_22rem]">
-              <section>
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <h2 className="text-4xl font-black text-[#f4e7fb]">Today's Schedule</h2>
-                  <button type="button" className="text-sm font-black text-[#f0b7ff] transition hover:text-white">
-                    View Full Calendar
-                  </button>
-                </div>
-
-                <div className="mt-7 grid gap-5">
-                  {scheduleItems.map((item) => (<article key={item.title} className={`relative overflow-hidden rounded-2xl border border-white/[0.12] bg-white/[0.055] p-6 shadow-[0_20px_70px_rgba(0,0,0,0.2)] backdrop-blur-xl ${item.muted ? "opacity-55" : ""}`}>
-                      <div className={`absolute bottom-6 left-6 top-6 w-1 rounded-full ${item.accent}`}/>
-                      <div className="ml-7 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div>
-                          <h3 className="text-2xl font-black text-[#f4e7fb]">{item.title}</h3>
-                          <p className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-semibold text-white/[0.62]">
-                            <span>{item.time}</span>
-                            <span className="inline-flex items-center gap-2">
-                              <MapPin size={15}/>
-                              {item.studio}
-                            </span>
-                          </p>
-                        </div>
-                        <div className="text-left lg:text-right">
-                          <p className="text-lg font-black text-[#f4e7fb]">{item.students} Students</p>
-                          <span className="mt-2 inline-flex rounded-lg bg-white/10 px-3 py-1 text-xs font-black uppercase text-[#f0b7ff]">
-                            {item.status}
-                          </span>
-                        </div>
-                      </div>
-                    </article>))}
-                </div>
-              </section>
-
-              <aside className="grid gap-7">
-                <article className="rounded-[1.75rem] border border-white/[0.12] bg-white/[0.055] p-8 text-center shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-xl">
-                  <div className="relative mx-auto h-28 w-28 rounded-full border-4 border-[#f0b7ff] p-1 shadow-[0_0_35px_rgba(240,183,255,0.36)]">
-                    <img src={avatarSrc} alt="" className="h-full w-full rounded-full object-cover"/>
-                    <span className="absolute bottom-1 right-0 inline-flex h-7 w-7 items-center justify-center rounded-full bg-cyanGlow text-ink">
-                      <Star size={16} fill="currentColor"/>
-                    </span>
-                  </div>
-
-                  <h2 className="mt-6 text-3xl font-black text-[#f4e7fb]">{teacher.fullName}</h2>
-                  <p className="mt-2 text-base font-black text-[#f0b7ff]">{instructorTitle}</p>
-
-                  <div className="mt-7 grid grid-cols-3 gap-3 border-t border-white/10 pt-6">
-                    <div>
-                      <p className="text-xl font-black text-[#f4e7fb]">{teacher.experienceYears}</p>
-                      <p className="mt-1 text-xs font-black uppercase text-white/48">Years</p>
-                    </div>
-                    <div className="border-x border-white/10">
-                      <p className="text-xl font-black text-[#f4e7fb]">4.9</p>
-                      <p className="mt-1 text-xs font-black uppercase text-white/48">Rating</p>
-                    </div>
-                    <div>
-                      <p className="text-xl font-black text-[#f4e7fb]">850</p>
-                      <p className="mt-1 text-xs font-black uppercase text-white/48">Hours</p>
-                    </div>
-                  </div>
-                </article>
-
-                <article className="rounded-[1.75rem] border border-white/[0.12] bg-white/[0.055] p-7 shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-xl">
-                  <h2 className="text-3xl font-black text-[#f4e7fb]">Admin Tasks</h2>
-
-                  <div className="mt-6 grid gap-3">
-                    {adminTasks.map((task) => {
-                const Icon = task.icon;
-                return (<button key={task.label} type="button" className="flex min-h-16 items-center justify-between gap-4 rounded-2xl bg-white/[0.06] px-5 text-left transition hover:bg-white/[0.09]">
-                          <span className="inline-flex items-center gap-4 text-sm font-black text-white/80">
-                            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-orchid/25 text-[#f0b7ff]">
-                              <Icon size={21}/>
-                            </span>
-                            {task.label}
-                          </span>
-                          <ChevronRight size={18} className="text-white/45"/>
-                        </button>);
-            })}
-                  </div>
-                </article>
-              </aside>
-            </div>
           </section>)}
         </main>
       </div>
     </div>);
+}
+function TeacherProfileEditForm({ teacher, isSaving, onCancel, onSubmit, }) {
+    const [availableDays, setAvailableDays] = useState(Array.isArray(teacher.availableDays) ? teacher.availableDays : []);
+    const [avatarFileName, setAvatarFileName] = useState(teacher.avatarFileName ?? "");
+    const [avatarPreviewDataUrl, setAvatarPreviewDataUrl] = useState(teacher.avatarImageDataUrl ?? "");
+    const [portfolioFileName, setPortfolioFileName] = useState(teacher.portfolioFileName ?? "");
+    function toggleTeachingDay(day) {
+        setAvailableDays((currentDays) => currentDays.includes(day)
+            ? currentDays.filter((currentDay) => currentDay !== day)
+            : [...currentDays, day]);
+    }
+    function handleAvatarAttachment(event) {
+        const input = event.currentTarget;
+        const file = input.files?.[0];
+        if (!file) {
+            return;
+        }
+        if (!avatarFileTypes.includes(file.type)) {
+            input.value = "";
+            void showErrorAlert("Invalid Image", "Please attach a PNG, JPG, or WebP image.");
+            return;
+        }
+        if (file.size > maxAvatarFileSize) {
+            input.value = "";
+            void showErrorAlert("Image Too Large", "Avatar image must be smaller than 1 MB.");
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            if (typeof reader.result === "string") {
+                setAvatarFileName(file.name);
+                setAvatarPreviewDataUrl(reader.result);
+            }
+        };
+        reader.onerror = () => {
+            input.value = "";
+            void showErrorAlert("Upload Failed", "Unable to read avatar image.");
+        };
+        reader.readAsDataURL(file);
+    }
+    async function handleSubmit(event) {
+        event.preventDefault();
+        if (availableDays.length === 0) {
+            await showErrorAlert("Missing Availability", "Select at least one available teaching day.");
+            return;
+        }
+        const formData = new FormData(event.currentTarget);
+        await onSubmit({
+            fullName: String(formData.get("fullName") ?? ""),
+            email: String(formData.get("email") ?? ""),
+            phone: String(formData.get("phone") ?? ""),
+            username: String(formData.get("username") ?? ""),
+            danceStyles: String(formData.get("danceStyles") ?? ""),
+            experienceYears: Number(formData.get("experienceYears") ?? 0),
+            qualifications: String(formData.get("qualifications") ?? ""),
+            biography: String(formData.get("biography") ?? ""),
+            availableDays,
+            avatarFileName: avatarFileName || undefined,
+            avatarImageDataUrl: avatarPreviewDataUrl || undefined,
+            portfolioFileName: portfolioFileName || undefined,
+        });
+    }
+    return (<form className="mt-12 grid gap-7" onSubmit={handleSubmit}>
+      <section className="rounded-[1.75rem] border border-[#f0b7ff]/18 bg-white/[0.055] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-xl sm:p-8">
+        <div className="flex flex-col gap-5 border-b border-white/10 pb-6 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-cyanGlow">Editable Profile</p>
+            <h2 className="mt-2 text-3xl font-black text-[#f4e7fb]">Update Your Information</h2>
+            <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-white/58">
+              Keep your contact details, teaching profile, and availability current for students and administrators.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button type="button" onClick={onCancel} disabled={isSaving} className="inline-flex min-h-12 items-center justify-center gap-3 rounded-full border border-white/12 px-6 text-sm font-black text-white/68 transition hover:border-white/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
+              <X size={18}/>
+              Cancel
+            </button>
+            <button type="submit" disabled={isSaving} className="inline-flex min-h-12 items-center justify-center gap-3 rounded-full bg-gradient-to-r from-[#e8a3ff] via-[#c026ff] to-[#e026b4] px-7 text-sm font-black text-white shadow-[0_18px_45px_rgba(217,28,255,0.28)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70">
+              <Save size={18}/>
+              {isSaving ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-7 grid gap-7 xl:grid-cols-[20rem_1fr]">
+          <div className="grid content-start gap-4">
+            <span className={profileLabelClass}>Profile Avatar</span>
+            <label className="group grid min-h-[17rem] cursor-pointer place-items-center rounded-2xl border border-dashed border-white/18 bg-[#0b0310]/72 p-5 text-center transition hover:border-[#f0b7ff]/60 hover:bg-[#f0b7ff]/8">
+              <span className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-[#f0b7ff]/80 bg-[#140618] shadow-[0_0_40px_rgba(240,183,255,0.24)]">
+                {avatarPreviewDataUrl ? (<img src={avatarPreviewDataUrl} alt="" className="h-full w-full object-cover"/>) : (<Upload className="text-[#f0b7ff]" size={34}/>)}
+              </span>
+              <span className="mt-4 block max-w-full truncate text-sm font-black text-white/82">
+                {avatarFileName || "Attach profile image"}
+              </span>
+              <span className="mt-2 block text-xs font-bold uppercase tracking-[0.08em] text-white/42">
+                PNG, JPG, or WebP
+              </span>
+              <input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleAvatarAttachment}/>
+            </label>
+          </div>
+
+          <div className="grid content-start gap-5 md:grid-cols-2">
+            <label className="grid gap-3 md:col-span-2">
+              <span className={profileLabelClass}>Full Name</span>
+              <input className={profileInputClass} name="fullName" defaultValue={teacher.fullName} placeholder="Full name" required/>
+            </label>
+            <label className="grid gap-3">
+              <span className={profileLabelClass}>Email Address</span>
+              <input className={profileInputClass} name="email" type="email" defaultValue={teacher.email} placeholder="teacher@example.com" required/>
+            </label>
+            <label className="grid gap-3">
+              <span className={profileLabelClass}>Phone Number</span>
+              <input className={profileInputClass} name="phone" defaultValue={teacher.phone} placeholder="+358 40 000 0000" required/>
+            </label>
+            <label className="grid gap-3">
+              <span className={profileLabelClass}>Username</span>
+              <input className={profileInputClass} name="username" defaultValue={teacher.username} placeholder="teacher_username" required/>
+            </label>
+            <label className="grid gap-3">
+              <span className={profileLabelClass}>Experience Years</span>
+              <input className={profileInputClass} name="experienceYears" type="number" min={0} defaultValue={teacher.experienceYears} required/>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-[1.75rem] border border-white/[0.12] bg-white/[0.055] p-6 shadow-[0_24px_90px_rgba(0,0,0,0.26)] backdrop-blur-xl sm:p-8">
+        <div className="flex items-center gap-4">
+          <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-cyanGlow/20 text-cyanGlow">
+            <FileText size={25}/>
+          </span>
+          <h2 className="text-3xl font-black text-[#f4e7fb]">Teaching Information</h2>
+        </div>
+
+        <div className="mt-7 grid gap-5 lg:grid-cols-3">
+          <label className="grid gap-3">
+            <span className={profileLabelClass}>Dancing Style</span>
+            <select className={`${profileInputClass} cursor-pointer`} name="danceStyles" defaultValue={teacher.danceStyles || ""} required>
+              <option value="" disabled className="bg-[#140618] text-white/50">
+                Select dancing style
+              </option>
+              {danceStyleOptions.map((style) => (<option key={style} value={style} className="bg-[#140618] text-white">
+                  {style}
+                </option>))}
+            </select>
+          </label>
+          <label className="grid gap-3 lg:col-span-2">
+            <span className={profileLabelClass}>Qualifications</span>
+            <input className={profileInputClass} name="qualifications" defaultValue={teacher.qualifications} placeholder="Dance diploma, certified instructor" required/>
+          </label>
+        </div>
+
+        <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_22rem]">
+          <label className="grid gap-3">
+            <span className={profileLabelClass}>Biography</span>
+            <textarea className={`${profileInputClass} min-h-[15rem] resize-none leading-7`} name="biography" defaultValue={teacher.biography} placeholder="Tell students about your teaching style..." required/>
+          </label>
+
+          <div className="grid content-start gap-5">
+            <div className="grid gap-3">
+              <span className={profileLabelClass}>Available Teaching Days</span>
+              <div className="flex flex-wrap gap-2">
+                {classDayOptions.map((day) => (<button key={day} type="button" onClick={() => toggleTeachingDay(day)} disabled={isSaving} className={cn("min-h-10 min-w-12 rounded-full border px-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60", availableDays.includes(day)
+            ? "border-[#f0b7ff] bg-[#f0b7ff] text-[#17061d]"
+            : "border-white/15 bg-[#2a1631] text-white/75 hover:border-[#f0b7ff]/50 hover:text-white")}>
+                    {day}
+                  </button>))}
+              </div>
+            </div>
+
+            <label className="grid gap-3">
+              <span className={profileLabelClass}>Portfolio File Name</span>
+              <input className={profileInputClass} value={portfolioFileName} onChange={(event) => setPortfolioFileName(event.target.value)} placeholder="portfolio.pdf"/>
+            </label>
+          </div>
+        </div>
+      </section>
+    </form>);
 }
 function TeacherEnrolmentRequestsSection({ teacher, }) {
     const [applications, setApplications] = useState(() => getApplicationsForTeacher(teacher));
