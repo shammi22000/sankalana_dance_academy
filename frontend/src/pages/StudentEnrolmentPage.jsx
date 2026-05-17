@@ -117,6 +117,21 @@ function formatClassDays(days) {
     }
     return cleanDays.map((day) => dayNameMap[day] ?? day).join(", ");
 }
+function getClassCapacity(classItem) {
+    return Number(classItem.capacity) || 0;
+}
+function getClassRemainingSeats(classItem) {
+    const capacity = getClassCapacity(classItem);
+    const remainingSeats = Number(classItem.remainingSeats ?? classItem.availableSeats);
+    return Number.isFinite(remainingSeats) ? Math.max(remainingSeats, 0) : capacity;
+}
+function getClassEnrolledStudentCount(classItem) {
+    const enrolledStudentCount = Number(classItem.enrolledStudentCount);
+    if (Number.isFinite(enrolledStudentCount)) {
+        return Math.max(enrolledStudentCount, 0);
+    }
+    return Math.max(getClassCapacity(classItem) - getClassRemainingSeats(classItem), 0);
+}
 function readCreatedTeacherClasses() {
     if (typeof window === "undefined") {
         return [];
@@ -152,7 +167,8 @@ function getAvailableClassSlots() {
         const classDays = Array.isArray(classItem.days) ? classItem.days : [];
         const startTime = formatClassTime(classItem.startTime);
         const endTime = formatClassTime(classItem.endTime);
-        const capacity = Number(classItem.capacity) || 0;
+        const capacity = getClassCapacity(classItem);
+        const remainingSeats = getClassRemainingSeats(classItem);
         return [{
                 id: classItem.id,
                 danceStyleId,
@@ -161,7 +177,9 @@ function getAvailableClassSlots() {
                 day: formatClassDays(classDays),
                 days: classDays.length > 0 ? classDays : ["Flexible"],
                 time: `${startTime} - ${endTime}`,
-                seats: capacity,
+                seats: remainingSeats,
+                capacity,
+                enrolledStudentCount: getClassEnrolledStudentCount(classItem),
                 level: classItem.classLevel,
                 studio: classItem.studio,
                 description: classItem.description,
@@ -179,10 +197,12 @@ function getAvailableTeachers() {
         const teacherId = getTeacherIdForClass(classItem, danceStyleId);
         const existingTeacher = teacherMap.get(teacherId);
         const classDays = Array.isArray(classItem.days) ? classItem.days : [];
-        const capacity = Number(classItem.capacity) || 0;
+        const capacity = getClassCapacity(classItem);
+        const remainingSeats = getClassRemainingSeats(classItem);
         if (existingTeacher) {
-            existingTeacher.availableSeats += capacity;
-            existingTeacher.students = `${existingTeacher.availableSeats} available seats`;
+            existingTeacher.capacity += capacity;
+            existingTeacher.availableSeats += remainingSeats;
+            existingTeacher.students = `${existingTeacher.availableSeats} seats remaining`;
             return;
         }
         teacherMap.set(teacherId, {
@@ -191,11 +211,12 @@ function getAvailableTeachers() {
             danceStyleId,
             specialization: classItem.teacherSpecialization ?? classItem.danceStyle,
             experience: classItem.teacherExperienceYears ? `${classItem.teacherExperienceYears} years experience` : "Experience not added",
-            students: `${capacity} available seats`,
+            students: `${remainingSeats} seats remaining`,
             time: `${formatClassDays(classDays)} • ${formatClassTime(classItem.startTime)}`,
             image: classItem.teacherAvatarImageDataUrl || danceImages.story[index % danceImages.story.length],
             bio: classItem.teacherBiography || classItem.description || `Teacher-created class for ${classItem.danceStyle}.`,
-            availableSeats: capacity,
+            capacity,
+            availableSeats: remainingSeats,
         });
     });
     return Array.from(teacherMap.values());
@@ -464,9 +485,14 @@ export function StudentEnrolmentPage() {
             setErrors(nextErrors);
             return;
         }
+        if (step === 2 && selectedSlot && selectedSlot.seats <= 0) {
+            setErrors({ slotId: "This class is full. Please select another class time." });
+            return;
+        }
         if (step === 6) {
             try {
                 const application = await createStudentEnrolment(data);
+                await getAllTeacherClasses().catch(() => []);
                 persistSubmittedEnrolment(application);
                 localStorage.removeItem(draftStorageKey);
                 setSubmitted(application);
@@ -681,7 +707,7 @@ function DateTimeStep({ selectedStyle, value, error, onChangeStyle, onSelect, })
                               {teacher.experience}
                             </span>
                             <span className="rounded-full border border-white/10 bg-white/[0.055] px-3 py-2">
-                              {teacher.students} students
+                              {teacher.students}
                             </span>
                           </div>
                           <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-white/68">{teacher.bio}</p>
@@ -691,9 +717,12 @@ function DateTimeStep({ selectedStyle, value, error, onChangeStyle, onSelect, })
                       <div className="mt-6 grid gap-4">
                         {teacherSlots.map((slot) => {
                     const selected = value === slot.id;
-                    return (<button key={slot.id} type="button" onClick={() => onSelect(slot)} className={cn("grid gap-5 rounded-2xl border p-5 text-left transition sm:grid-cols-[1fr_auto] sm:items-center", selected
+                    const full = slot.seats <= 0;
+                    return (<button key={slot.id} type="button" onClick={() => !full && onSelect(slot)} disabled={full} className={cn("grid gap-5 rounded-2xl border p-5 text-left transition sm:grid-cols-[1fr_auto] sm:items-center", selected
                             ? "border-cyanGlow bg-cyanGlow/12 shadow-[0_0_35px_rgba(34,211,238,0.25)]"
-                            : "border-white/10 bg-[#0b0310]/72 hover:border-cyanGlow/45")}>
+                            : full
+                                ? "cursor-not-allowed border-white/10 bg-[#0b0310]/46 opacity-58"
+                                : "border-white/10 bg-[#0b0310]/72 hover:border-cyanGlow/45")}>
                               <div>
                                 <p className={cn("text-xl font-black", selected ? "text-cyanGlow" : "text-[#f4e7fb]")}>
                                   {slot.className}
@@ -703,10 +732,12 @@ function DateTimeStep({ selectedStyle, value, error, onChangeStyle, onSelect, })
                                 </p>
                               </div>
                               <div className="grid gap-3 sm:justify-items-end">
-                                <span className="rounded-full bg-[#1f6770] px-4 py-2 text-xs font-black text-cyanGlow">
+                                <span className={cn("rounded-full px-4 py-2 text-xs font-black", full ? "bg-[#ff7aa8]/16 text-[#ffb0c8]" : "bg-[#1f6770] text-cyanGlow")}>
                                   {slot.level}
                                 </span>
-                                <span className="text-sm font-black text-white/70">{slot.seats} seats available</span>
+                                <span className="text-sm font-black text-white/70">
+                                  {full ? "No seats left" : `${slot.seats} of ${slot.capacity} seats available`}
+                                </span>
                                 {selected && <CircleCheck className="text-cyanGlow" size={34}/>}
                               </div>
                             </button>);
@@ -864,7 +895,7 @@ function ReviewFinishStep({ data, selectedStyle, selectedSlot, selectedTeacher, 
         <ReviewCard icon={CalendarDays} title="Selected Date & Time" onEdit={() => onEdit(2)}>
           <p className="font-black text-white">{selectedSlot?.className ?? "Not selected"}</p>
           <p className="mt-1 text-sm text-white/52">{selectedSlot ? `${selectedSlot.day} • ${selectedSlot.time}` : ""}</p>
-          <p className="mt-1 text-sm text-white/52">{selectedSlot ? `${selectedSlot.seats} seats • ${selectedSlot.level}` : ""}</p>
+          <p className="mt-1 text-sm text-white/52">{selectedSlot ? `${selectedSlot.seats} seats available • ${selectedSlot.level}` : ""}</p>
         </ReviewCard>
         <ReviewCard icon={UserRound} title="Selected Teacher" onEdit={() => onEdit(3)}>
           <p className="font-black text-white">{selectedTeacher?.name ?? "Not selected"}</p>

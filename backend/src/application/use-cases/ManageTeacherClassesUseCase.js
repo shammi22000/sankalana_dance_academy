@@ -6,17 +6,18 @@ const TeacherClass_1 = require("../../domain/entities/TeacherClass");
 const teachingDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const classLevels = ["Beginner", "Intermediate", "Advanced", "Professional"];
 class ManageTeacherClassesUseCase {
-    constructor(teacherClassRepository, teacherRegistrationRepository) {
+    constructor(teacherClassRepository, teacherRegistrationRepository, enrolmentApplicationRepository) {
         this.teacherClassRepository = teacherClassRepository;
         this.teacherRegistrationRepository = teacherRegistrationRepository;
+        this.enrolmentApplicationRepository = enrolmentApplicationRepository;
     }
     async listAll() {
         const teacherClasses = await this.teacherClassRepository.findAll();
-        return teacherClasses.map((teacherClass) => teacherClass.toJSON());
+        return this.withSeatAvailability(teacherClasses);
     }
     async listForTeacher(teacherId) {
         const teacherClasses = await this.teacherClassRepository.findByTeacherId(teacherId);
-        return teacherClasses.map((teacherClass) => teacherClass.toJSON());
+        return this.withSeatAvailability(teacherClasses);
     }
     async create(teacherId, dto) {
         const teacher = await this.teacherRegistrationRepository.findById(teacherId);
@@ -41,7 +42,7 @@ class ManageTeacherClassesUseCase {
             ...normalized,
         });
         const savedClass = await this.teacherClassRepository.save(teacherClass);
-        return savedClass.toJSON();
+        return (await this.withSeatAvailability([savedClass]))[0];
     }
     async update(teacherId, classId, dto) {
         const teacher = await this.teacherRegistrationRepository.findById(teacherId);
@@ -61,7 +62,7 @@ class ManageTeacherClassesUseCase {
         if (!updatedClass) {
             throw new ApplicationError_1.NotFoundError("Teacher class not found.");
         }
-        return updatedClass.toJSON();
+        return (await this.withSeatAvailability([updatedClass]))[0];
     }
     async delete(teacherId, classId) {
         const deleted = await this.teacherClassRepository.delete(classId, teacherId);
@@ -85,6 +86,60 @@ class ManageTeacherClassesUseCase {
                 ? dto.milestones.map((milestone) => milestone.trim()).filter(Boolean)
                 : [],
         };
+    }
+    async withSeatAvailability(teacherClasses) {
+        const classJsons = teacherClasses.map((teacherClass) => teacherClass.toJSON());
+        if (!this.enrolmentApplicationRepository || classJsons.length === 0) {
+            return classJsons.map((classItem) => ({
+                ...classItem,
+                enrolledStudentCount: 0,
+                approvedStudentCount: 0,
+                pendingEnrolmentCount: 0,
+                remainingSeats: Number(classItem.capacity) || 0,
+                availableSeats: Number(classItem.capacity) || 0,
+            }));
+        }
+        const classIds = classJsons.map((classItem) => classItem.id);
+        const applications = await this.enrolmentApplicationRepository.findByClassIds(classIds);
+        const summaries = new Map(classIds.map((classId) => [
+            classId,
+            {
+                reservedStudentIds: new Set(),
+                approvedStudentIds: new Set(),
+                pendingEnrolmentCount: 0,
+            },
+        ]));
+        applications.forEach((application) => {
+            const applicationJson = application.toJSON();
+            const classId = applicationJson.data?.slotId;
+            const summary = summaries.get(classId);
+            if (!summary) {
+                return;
+            }
+            if (applicationJson.status !== "Rejected" && applicationJson.studentId) {
+                summary.reservedStudentIds.add(applicationJson.studentId);
+            }
+            if (applicationJson.status === "Approved" && applicationJson.studentId) {
+                summary.approvedStudentIds.add(applicationJson.studentId);
+            }
+            if (applicationJson.status === "Pending Review") {
+                summary.pendingEnrolmentCount += 1;
+            }
+        });
+        return classJsons.map((classItem) => {
+            const capacity = Number(classItem.capacity) || 0;
+            const summary = summaries.get(classItem.id);
+            const enrolledStudentCount = summary?.reservedStudentIds.size ?? 0;
+            const remainingSeats = Math.max(capacity - enrolledStudentCount, 0);
+            return {
+                ...classItem,
+                enrolledStudentCount,
+                approvedStudentCount: summary?.approvedStudentIds.size ?? 0,
+                pendingEnrolmentCount: summary?.pendingEnrolmentCount ?? 0,
+                remainingSeats,
+                availableSeats: remainingSeats,
+            };
+        });
     }
     validate(dto) {
         const errors = {};

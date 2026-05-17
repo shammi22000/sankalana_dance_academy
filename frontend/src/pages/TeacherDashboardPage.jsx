@@ -200,6 +200,21 @@ function formatClassSchedule(classItem) {
     }
     return `${classItem.days.join(", ") || "Flexible"} • ${classItem.startTime} - ${classItem.endTime}`;
 }
+function getClassCapacity(classItem) {
+    return Number(classItem?.capacity) || 0;
+}
+function getClassRemainingSeats(classItem) {
+    const capacity = getClassCapacity(classItem);
+    const remainingSeats = Number(classItem?.remainingSeats ?? classItem?.availableSeats);
+    return Number.isFinite(remainingSeats) ? Math.max(remainingSeats, 0) : capacity;
+}
+function getClassEnrolledStudentCount(classItem) {
+    const enrolledStudentCount = Number(classItem?.enrolledStudentCount);
+    if (Number.isFinite(enrolledStudentCount)) {
+        return Math.max(enrolledStudentCount, 0);
+    }
+    return Math.max(getClassCapacity(classItem) - getClassRemainingSeats(classItem), 0);
+}
 function getStatusLabel(status) {
     return status.charAt(0).toUpperCase() + status.slice(1);
 }
@@ -925,7 +940,7 @@ function TeacherRequestRow({ application, classItem, onApprove, onReject, }) {
         <p className="text-sm font-black text-white">{classItem?.className ?? "Class not found"}</p>
         <p className="mt-2 text-xs font-semibold leading-5 text-white/56">{formatClassSchedule(classItem)}</p>
         <p className="mt-2 text-xs font-black uppercase tracking-[0.1em] text-cyanGlow">
-          {classItem ? `${classItem.classLevel} • ${classItem.capacity} seats • ${classItem.studio}` : "Not available"}
+          {classItem ? `${classItem.classLevel} • ${getClassRemainingSeats(classItem)} of ${getClassCapacity(classItem)} seats left • ${classItem.studio}` : "Not available"}
         </p>
       </div>
 
@@ -979,7 +994,8 @@ function TeacherClassesSection({ teacher, }) {
     const [isLoadingClasses, setIsLoadingClasses] = useState(true);
     const [isAddClassOpen, setIsAddClassOpen] = useState(false);
     const [editingClass, setEditingClass] = useState(null);
-    const totalCapacity = createdClasses.reduce((total, classItem) => total + classItem.capacity, 0);
+    const totalCapacity = createdClasses.reduce((total, classItem) => total + getClassCapacity(classItem), 0);
+    const totalRemainingSeats = createdClasses.reduce((total, classItem) => total + getClassRemainingSeats(classItem), 0);
     const weeklySessions = createdClasses.reduce((total, classItem) => total + classItem.days.length, 0);
     useEffect(() => {
         let isMounted = true;
@@ -1101,7 +1117,7 @@ function TeacherClassesSection({ teacher, }) {
         </article>) : (<section className="mt-12">
           <div className="grid gap-5 md:grid-cols-3">
             <ClassMetric icon={Sparkles} label="Active Classes" value={String(createdClasses.length)} detail="Created by you"/>
-            <ClassMetric icon={UsersRound} label="Total Capacity" value={String(totalCapacity)} detail="Available enrolment seats"/>
+            <ClassMetric icon={UsersRound} label="Remaining Seats" value={String(totalRemainingSeats)} detail={`${totalCapacity} total seats`}/>
             <ClassMetric icon={CalendarDays} label="Weekly Sessions" value={String(weeklySessions)} detail="Across selected days"/>
           </div>
 
@@ -1141,8 +1157,18 @@ function TeacherClassesSection({ teacher, }) {
                     </span>
                     <span className="inline-flex items-center gap-3">
                       <UsersRound size={17} className="text-[#f0b7ff]"/>
-                      {classItem.capacity} seats
+                      {getClassRemainingSeats(classItem)} of {getClassCapacity(classItem)} seats remaining
                     </span>
+                  </div>
+
+                  <div className="mt-5 rounded-2xl border border-cyanGlow/25 bg-cyanGlow/10 p-4">
+                    <div className="flex items-center justify-between gap-4 text-sm font-black">
+                      <span className="text-white/64">Enrolled / reserved</span>
+                      <span className="text-cyanGlow">{getClassEnrolledStudentCount(classItem)} students</span>
+                    </div>
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                      <div className="h-full rounded-full bg-gradient-to-r from-[#bb26ff] via-[#6577ff] to-cyanGlow" style={{ width: `${getClassCapacity(classItem) > 0 ? Math.min(100, Math.round((getClassEnrolledStudentCount(classItem) / getClassCapacity(classItem)) * 100)) : 0}%` }}/>
+                    </div>
                   </div>
 
                   <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.055] p-4">

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, Bell, CalendarDays, Clock3, GraduationCap, Grid2X2, LogOut, MapPin, PlusCircle, ReceiptText, Search, Send, ShieldCheck, Sparkles, UserRoundPlus, UsersRound, WandSparkles, X, } from "lucide-react";
+import { BarChart3, Bell, CalendarDays, Clock3, GraduationCap, Grid2X2, LogOut, MapPin, Search, ShieldCheck, Sparkles, UserRoundPlus, UsersRound, X, } from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { StudentManagementSection } from "../components/StudentManagementSection";
 import { TeacherManagementSection } from "../components/TeacherManagementSection";
@@ -112,6 +112,25 @@ function formatClassDays(days) {
     const readableDays = Array.isArray(days) ? days.filter(Boolean) : [];
     return readableDays.length > 0 ? readableDays.join(", ") : "Flexible";
 }
+function getClassCapacity(classItem) {
+    return Number(classItem?.capacity) || 0;
+}
+function getClassRemainingSeats(classItem) {
+    const capacity = getClassCapacity(classItem);
+    const remainingSeats = Number(classItem?.remainingSeats ?? classItem?.availableSeats);
+    if (Number.isFinite(remainingSeats)) {
+        return Math.max(remainingSeats, 0);
+    }
+    const enrolledStudentCount = Number(classItem?.enrolledStudentCount);
+    return Number.isFinite(enrolledStudentCount) ? Math.max(capacity - enrolledStudentCount, 0) : capacity;
+}
+function getClassEnrolledStudentCount(classItem) {
+    const enrolledStudentCount = Number(classItem?.enrolledStudentCount);
+    if (Number.isFinite(enrolledStudentCount)) {
+        return Math.max(enrolledStudentCount, 0);
+    }
+    return Math.max(getClassCapacity(classItem) - getClassRemainingSeats(classItem), 0);
+}
 function formatDate(value) {
     if (!value || Number.isNaN(Date.parse(value))) {
         return "Date not set";
@@ -128,6 +147,12 @@ function getUniqueOptions(items, fieldName) {
 function getApprovedStudentCountForClass(classId, enrolments) {
     return new Set(enrolments
         .filter((application) => application.status === "Approved" && application.data?.slotId === classId)
+        .map((application) => application.studentId)
+        .filter(Boolean)).size;
+}
+function getReservedStudentCountForClass(classId, enrolments) {
+    return new Set(enrolments
+        .filter((application) => application.status !== "Rejected" && application.data?.slotId === classId)
         .map((application) => application.studentId)
         .filter(Boolean)).size;
 }
@@ -313,12 +338,6 @@ export function AdminDashboardPage({ onLogout } = {}) {
             accent: "text-cyanGlow",
         },
     ];
-    const shortcuts = [
-        { label: "New Class", icon: PlusCircle },
-        { label: "Send Broadcast", icon: Send },
-        { label: "Invoicing", icon: ReceiptText },
-        { label: "Audit Logs", icon: WandSparkles },
-    ];
     return (<div className="min-h-screen bg-black text-white">
       <div className="grid min-h-screen lg:grid-cols-[20rem_1fr]">
         <aside className="relative z-20 flex flex-col border-b border-white/10 bg-[#120415]/96 px-5 py-7 shadow-[18px_0_70px_rgba(134,20,190,0.13)] lg:border-b-0 lg:border-r">
@@ -409,30 +428,6 @@ export function AdminDashboardPage({ onLogout } = {}) {
             <div className="mt-7 grid gap-7 xl:grid-cols-[1fr_24rem]">
               <div className="grid gap-7">
                 <HorizontalMetricChart title="Enrolment Pipeline" subtitle="Student enrolment requests by teacher decision status" items={enrolmentPipelineChartData}/>
-
-                <article className="rounded-[1.75rem] border border-white/[0.12] bg-white/[0.055] p-7 shadow-[0_24px_90px_rgba(0,0,0,0.25)] backdrop-blur-xl sm:p-8">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                      <h3 className="text-3xl font-black text-[#f4e7fb]">Management Shortcuts</h3>
-                      <p className="mt-2 text-base font-semibold text-white/60">
-                        Quick access to frequent administrative tasks.
-                      </p>
-                    </div>
-                    <button type="button" className="text-sm font-black text-[#f0b7ff] transition hover:text-white">
-                      Customize Grid
-                    </button>
-                  </div>
-
-                  <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    {shortcuts.map((shortcut) => {
-                const Icon = shortcut.icon;
-                return (<button key={shortcut.label} type="button" className="grid min-h-36 place-items-center rounded-2xl border border-white/10 bg-white/[0.055] p-5 text-center transition hover:border-orchid/45 hover:bg-white/[0.085]">
-                          <Icon className="text-cyanGlow" size={32}/>
-                          <span className="mt-4 text-sm font-black text-white/82">{shortcut.label}</span>
-                        </button>);
-            })}
-                  </div>
-                </article>
 
                 <article className="rounded-[1.75rem] border border-white/[0.12] bg-white/[0.055] p-7 shadow-[0_24px_90px_rgba(0,0,0,0.25)] backdrop-blur-xl sm:p-8">
                   <h3 className="text-3xl font-black text-[#f4e7fb]">Pending Enrolment Queue</h3>
@@ -541,15 +536,30 @@ function AdminClassesSection({ classes, enrolments, isLoading }) {
     const [styleFilter, setStyleFilter] = useState("all");
     const [levelFilter, setLevelFilter] = useState("all");
     const classSummaries = useMemo(() => classes.map((classItem) => {
-        const approvedStudents = getApprovedStudentCountForClass(classItem.id, enrolments);
-        const pendingEnrolments = enrolments.filter((application) => application.status === "Pending Review" && application.data?.slotId === classItem.id).length;
-        const capacity = Number(classItem.capacity) || 0;
-        const fillPercent = capacity > 0 ? Math.min(100, Math.round((approvedStudents / capacity) * 100)) : 0;
+        const approvedStudentsFromClass = Number(classItem.approvedStudentCount);
+        const pendingEnrolmentsFromClass = Number(classItem.pendingEnrolmentCount);
+        const approvedStudents = Number.isFinite(approvedStudentsFromClass)
+            ? approvedStudentsFromClass
+            : getApprovedStudentCountForClass(classItem.id, enrolments);
+        const pendingEnrolments = Number.isFinite(pendingEnrolmentsFromClass)
+            ? pendingEnrolmentsFromClass
+            : enrolments.filter((application) => application.status === "Pending Review" && application.data?.slotId === classItem.id).length;
+        const capacity = getClassCapacity(classItem);
+        const enrolledStudentCount = Number.isFinite(Number(classItem.enrolledStudentCount))
+            ? getClassEnrolledStudentCount(classItem)
+            : getReservedStudentCountForClass(classItem.id, enrolments);
+        const remainingSeats = getClassRemainingSeats({
+            ...classItem,
+            enrolledStudentCount,
+        });
+        const fillPercent = capacity > 0 ? Math.min(100, Math.round((enrolledStudentCount / capacity) * 100)) : 0;
         return {
             ...classItem,
             approvedStudents,
             pendingEnrolments,
+            enrolledStudentCount,
             capacity,
+            remainingSeats,
             fillPercent,
         };
     }), [classes, enrolments]);
@@ -581,9 +591,10 @@ function AdminClassesSection({ classes, enrolments, isLoading }) {
             .sort((first, second) => Date.parse(second.createdAt) - Date.parse(first.createdAt));
     }, [classSummaries, levelFilter, searchTerm, styleFilter]);
     const totalCapacity = classSummaries.reduce((total, classItem) => total + classItem.capacity, 0);
+    const remainingSeats = classSummaries.reduce((total, classItem) => total + classItem.remainingSeats, 0);
     const weeklySessions = classSummaries.reduce((total, classItem) => total + (Array.isArray(classItem.days) ? classItem.days.length : 0), 0);
     const activeTeacherCount = new Set(classSummaries.map((classItem) => classItem.teacherId).filter(Boolean)).size;
-    const enrolledStudents = classSummaries.reduce((total, classItem) => total + classItem.approvedStudents, 0);
+    const enrolledStudents = classSummaries.reduce((total, classItem) => total + classItem.enrolledStudentCount, 0);
     const classesByStyle = getClassStyleChartData(classes).map((item, index) => ({
         ...item,
         color: ["#22d3ee", "#f0b7ff", "#ff9edc", "#8b5cf6"][index % 4],
@@ -591,7 +602,7 @@ function AdminClassesSection({ classes, enrolments, isLoading }) {
     const classStats = [
         { label: "Registered Classes", value: classes.length, detail: "Created by teachers", icon: CalendarDays },
         { label: "Active Teachers", value: activeTeacherCount, detail: "With published classes", icon: GraduationCap },
-        { label: "Total Seats", value: totalCapacity, detail: `${enrolledStudents} approved enrolments`, icon: UsersRound },
+        { label: "Remaining Seats", value: remainingSeats, detail: `${totalCapacity} total, ${enrolledStudents} reserved`, icon: UsersRound },
         { label: "Weekly Sessions", value: weeklySessions, detail: "Across all schedules", icon: Sparkles },
     ];
     return (<section className="relative z-10 mx-auto max-w-7xl pb-10">
@@ -695,8 +706,8 @@ function AdminClassesSection({ classes, enrolments, isLoading }) {
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-white/42">Enrolment</p>
                   <div className="mt-4">
                     <div className="flex items-end justify-between gap-4">
-                      <span className="text-4xl font-black leading-none text-[#f4e7fb]">{formatCount(classItem.approvedStudents)}</span>
-                      <span className="pb-1 text-sm font-black text-white/54">of {formatCount(classItem.capacity)} seats</span>
+                      <span className="text-4xl font-black leading-none text-[#f4e7fb]">{formatCount(classItem.remainingSeats)}</span>
+                      <span className="pb-1 text-sm font-black text-white/54">of {formatCount(classItem.capacity)} seats left</span>
                     </div>
                     <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/[0.1]">
                       <div className="h-full rounded-full bg-gradient-to-r from-[#bb26ff] via-[#6577ff] to-cyanGlow" style={{ width: `${classItem.fillPercent}%` }}/>
@@ -705,11 +716,19 @@ function AdminClassesSection({ classes, enrolments, isLoading }) {
 
                   <div className="mt-6 grid gap-3 text-sm">
                     <div className="flex items-center justify-between border-t border-white/10 pt-3">
+                      <span className="font-black text-white/52">Reserved</span>
+                      <span className="font-black text-[#f0b7ff]">{formatCount(classItem.enrolledStudentCount)}</span>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-white/10 pt-3">
                       <span className="font-black text-white/52">Pending</span>
                       <span className="font-black text-[#ff9edc]">{formatCount(classItem.pendingEnrolments)}</span>
                     </div>
                     <div className="flex items-center justify-between border-t border-white/10 pt-3">
-                      <span className="font-black text-white/52">Capacity</span>
+                      <span className="font-black text-white/52">Approved</span>
+                      <span className="font-black text-cyanGlow">{formatCount(classItem.approvedStudents)}</span>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-white/10 pt-3">
+                      <span className="font-black text-white/52">Filled</span>
                       <span className="font-black text-cyanGlow">{classItem.fillPercent}%</span>
                     </div>
                     <div className="flex items-center justify-between border-t border-white/10 pt-3">

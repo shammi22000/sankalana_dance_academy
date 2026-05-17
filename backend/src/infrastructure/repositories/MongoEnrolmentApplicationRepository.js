@@ -22,6 +22,22 @@ class MongoEnrolmentApplicationRepository {
         const documents = await collection.find({ "data.teacherId": teacherId }).sort({ submittedAt: -1 }).toArray();
         return documents.map((document) => this.toEntity(document));
     }
+    async findByClassIds(classIds) {
+        if (!Array.isArray(classIds) || classIds.length === 0) {
+            return [];
+        }
+        const collection = await this.database.collection("enrolmentApplications");
+        const documents = await collection.find({ "data.slotId": { $in: classIds } }).sort({ submittedAt: -1 }).toArray();
+        return documents.map((document) => this.toEntity(document));
+    }
+    async countReservedSeatsByClassId(classId) {
+        const collection = await this.database.collection("enrolmentApplications");
+        const studentIds = await collection.distinct("studentId", {
+            "data.slotId": classId,
+            status: { $ne: "Rejected" },
+        });
+        return studentIds.filter(Boolean).length;
+    }
     async findAll() {
         const collection = await this.database.collection("enrolmentApplications");
         const documents = await collection.find({}).sort({ submittedAt: -1 }).toArray();

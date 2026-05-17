@@ -36,6 +36,18 @@ class ManageEnrolmentApplicationsUseCase {
             throw new ApplicationError_1.ValidationError({ slotId: "Selected teacher class was not found." });
         }
         const classJson = classSlot.toJSON();
+        const existingApplications = await this.enrolmentApplicationRepository.findByStudentId(studentId);
+        const alreadyHasActiveEnrolment = existingApplications.some((application) => {
+            const applicationJson = application.toJSON();
+            return applicationJson.data?.slotId === classJson.id && applicationJson.status !== "Rejected";
+        });
+        if (alreadyHasActiveEnrolment) {
+            throw new ApplicationError_1.ValidationError({ slotId: "You already have an active enrolment request for this class." });
+        }
+        const reservedSeatCount = await this.enrolmentApplicationRepository.countReservedSeatsByClassId(classJson.id);
+        if (reservedSeatCount >= Number(classJson.capacity)) {
+            throw new ApplicationError_1.ValidationError({ slotId: "This class is full. Please select another class time." });
+        }
         const normalizedData = {
             ...data,
             teacherId: classJson.teacherId,
