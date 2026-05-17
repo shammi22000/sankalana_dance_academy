@@ -14,8 +14,8 @@ const values = [
 
 export function StorySection() {
   return (
-    <section id="about" className="px-4 py-24 sm:px-6 lg:px-8">
-      <div className="mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[0.95fr_1fr]">
+    <section id="about" className="px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
+      <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[0.95fr_1fr]">
         <div className="grid grid-cols-2 gap-5">
           {storyImages.map((image, index) => (
             <div
@@ -38,7 +38,7 @@ export function StorySection() {
             eyebrow="Behind the Curtain at Sankalana"
             title="Where Passion Meets Technology"
           />
-          <div className="mt-7 space-y-5 text-base leading-8 text-white/75">
+          <div className="mt-6 space-y-4 text-sm leading-7 text-white/75 sm:text-base">
             <p>
               Our studio experience was built for management teams who need a system as precise and
               expressive as the work happening inside each class.
@@ -49,10 +49,10 @@ export function StorySection() {
             </p>
           </div>
 
-          <div className="mt-9 grid gap-4 sm:grid-cols-2">
+          <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {values.map((value) => (
               <div key={value.title} className="glass-panel rounded-xl p-5">
-                <h3 className="text-lg font-black text-cyanGlow">{value.title}</h3>
+                <h3 className="text-base font-black text-cyanGlow">{value.title}</h3>
                 <p className="mt-2 text-xs leading-5 text-white/70">{value.text}</p>
               </div>
             ))}

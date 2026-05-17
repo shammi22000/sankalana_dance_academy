@@ -31,6 +31,12 @@ export class MongoTeacherRegistrationRepository implements TeacherRegistrationRe
     });
   }
 
+  async findById(id: string): Promise<TeacherRegistration | null> {
+    const collection = await this.database.collection<TeacherRegistrationDocument>("teacherRegistrations");
+
+    return this.toEntity(await collection.findOne({ id }));
+  }
+
   async findByEmail(email: string): Promise<TeacherRegistration | null> {
     const collection = await this.database.collection<TeacherRegistrationDocument>("teacherRegistrations");
 

@@ -14,7 +14,7 @@ function EventCard({ event, onRegisterClick }: { event: EventItem; onRegisterCli
   return (
     <article
       className={cn(
-        "group relative min-h-[330px] overflow-hidden rounded-[1.7rem] border bg-[#180607] p-8 shadow-[0_26px_80px_rgba(0,0,0,0.25)] transition duration-500 hover:-translate-y-1 hover:bg-[#21090a] sm:p-10 lg:min-h-[380px]",
+        "group relative min-h-[280px] overflow-hidden rounded-2xl border bg-[#180607] p-6 shadow-[0_22px_65px_rgba(0,0,0,0.22)] transition duration-500 hover:-translate-y-1 hover:bg-[#21090a] sm:p-7 lg:min-h-[320px]",
         event.featured
           ? "border-champagne/70 shadow-[0_0_0_1px_rgba(244,199,107,0.16),0_30px_90px_rgba(214,159,95,0.12)]"
           : "border-[#5c2520] hover:border-champagne/50",
@@ -27,7 +27,7 @@ function EventCard({ event, onRegisterClick }: { event: EventItem; onRegisterCli
         <div className="flex items-start justify-between gap-5">
           <h3
             className={cn(
-              "text-balance text-3xl font-black leading-tight sm:text-4xl",
+              "text-balance text-2xl font-black leading-tight sm:text-3xl",
               event.featured ? "text-champagne" : "text-white",
             )}
           >
@@ -38,17 +38,17 @@ function EventCard({ event, onRegisterClick }: { event: EventItem; onRegisterCli
           </span>
         </div>
 
-        <div className="mt-10 grid gap-5 text-xl font-bold text-[#e0d2c5] sm:text-2xl">
-          <p className="flex items-center gap-5">
-            <CalendarDays className="shrink-0 text-champagne" size={27} strokeWidth={2.3} />
+        <div className="mt-8 grid gap-4 text-base font-semibold text-[#e0d2c5]">
+          <p className="flex items-center gap-4">
+            <CalendarDays className="shrink-0 text-champagne" size={22} strokeWidth={2.3} />
             {event.date}
           </p>
-          <p className="flex items-center gap-5">
-            <Clock3 className="shrink-0 text-champagne" size={27} strokeWidth={2.3} />
+          <p className="flex items-center gap-4">
+            <Clock3 className="shrink-0 text-champagne" size={22} strokeWidth={2.3} />
             {event.time}
           </p>
-          <p className="flex items-center gap-5">
-            <MapPin className="shrink-0 text-champagne" size={27} strokeWidth={2.3} />
+          <p className="flex items-center gap-4">
+            <MapPin className="shrink-0 text-champagne" size={22} strokeWidth={2.3} />
             {event.venue}
           </p>
         </div>
@@ -56,10 +56,10 @@ function EventCard({ event, onRegisterClick }: { event: EventItem; onRegisterCli
         <button
           type="button"
           onClick={() => onRegisterClick(source)}
-          className="mt-auto inline-flex w-fit items-center gap-4 pt-10 text-xl font-black text-champagne transition group-hover:gap-5 group-hover:text-white"
+          className="mt-auto inline-flex w-fit items-center gap-3 pt-8 text-sm font-black text-champagne transition group-hover:gap-4 group-hover:text-white"
         >
           Register Now
-          <ArrowRight size={26} strokeWidth={2.8} />
+          <ArrowRight size={18} strokeWidth={2.8} />
         </button>
       </div>
     </article>
@@ -70,25 +70,25 @@ export function EventsSection({ onRegisterClick }: EventsSectionProps) {
   return (
     <section
       id="events"
-      className="relative overflow-hidden bg-[#120405] px-4 py-24 sm:px-6 lg:px-8 lg:py-32"
+      className="relative overflow-hidden bg-[#120405] px-4 py-20 sm:px-6 lg:px-8 lg:py-24"
     >
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#5c2520] to-transparent" />
       <div className="absolute left-1/2 top-20 h-72 w-72 -translate-x-1/2 rounded-full bg-champagne/5 blur-3xl" />
 
       <div className="relative mx-auto max-w-[92rem]">
-        <div className="mx-auto max-w-6xl text-center">
-          <p className="text-sm font-black uppercase tracking-[0.55em] text-[#d3a06c] sm:text-base">
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#d3a06c]">
             What's Coming
           </p>
-          <h2 className="mt-8 text-balance text-5xl font-black leading-none text-white sm:text-6xl lg:text-7xl">
+          <h2 className="mt-4 text-balance text-3xl font-black leading-tight text-white sm:text-4xl lg:text-5xl">
             Upcoming Events & Workshops
           </h2>
-          <p className="mx-auto mt-9 max-w-4xl text-xl font-bold leading-9 text-[#d9c8ba] sm:text-2xl">
+          <p className="mx-auto mt-4 max-w-2xl text-base font-semibold leading-7 text-[#d9c8ba]">
             Join us for performances, workshops, and cultural celebrations.
           </p>
         </div>
 
-        <div className="mt-20 grid gap-8 lg:grid-cols-2">
+        <div className="mt-12 grid gap-6 lg:grid-cols-2">
           {upcomingEvents.map((event) => (
             <EventCard key={`${event.title}-${event.date}`} event={event} onRegisterClick={onRegisterClick} />
           ))}

@@ -20,9 +20,11 @@ import {
   UserRoundPen,
   XCircle,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { danceImages } from "../assets/danceImages";
 import { PageHeader } from "../components/PageHeader";
+import { getStudentEnrolments } from "../services/enrolmentService";
 import type { StudentAuthentication } from "../types/auth";
 import { cn } from "../utils/cn";
 import {
@@ -74,6 +76,35 @@ function formatSubmittedDate(value: string) {
 export function StudentDashboardPage() {
   const navigate = useNavigate();
   const authentication = getStoredStudentSession();
+  const [submittedEnrolment, setSubmittedEnrolment] = useState<SubmittedEnrolment | null>(() => readSubmittedEnrolment());
+
+  useEffect(() => {
+    if (!authentication) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadEnrolments() {
+      try {
+        const applications = await getStudentEnrolments();
+
+        if (isMounted) {
+          setSubmittedEnrolment(applications[0] ?? null);
+        }
+      } catch {
+        if (isMounted) {
+          setSubmittedEnrolment(readSubmittedEnrolment());
+        }
+      }
+    }
+
+    void loadEnrolments();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authentication?.student.id]);
 
   if (!authentication) {
     return <Navigate to="/student-login" replace />;
@@ -89,7 +120,6 @@ export function StudentDashboardPage() {
   const createdAt = new Date(student.createdAt);
   const expectedUpdate = new Date(createdAt);
   const approvalStatusLabel = student.approvalStatus.charAt(0).toUpperCase() + student.approvalStatus.slice(1);
-  const submittedEnrolment = readSubmittedEnrolment();
 
   expectedUpdate.setDate(expectedUpdate.getDate() + 6);
 

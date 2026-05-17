@@ -8,21 +8,21 @@ interface ContactLocationSectionProps {
 
 export function ContactLocationSection({ onContactClick }: ContactLocationSectionProps) {
   return (
-    <section id="contact" className="relative overflow-hidden px-4 py-24 sm:px-6 lg:px-8 lg:py-32">
+    <section id="contact" className="relative overflow-hidden px-4 py-20 sm:px-6 lg:px-8 lg:py-24">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-champagne/50 to-transparent" />
       <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.82fr_1.18fr] lg:items-stretch">
         <div className="glass-panel relative overflow-hidden rounded-[1.75rem] p-8 sm:p-10">
           <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-champagne/10 blur-3xl" />
           <div className="relative">
-            <div className="mb-7 inline-flex text-xs font-black uppercase tracking-[0.32em] text-champagne">
+            <div className="mb-4 inline-flex text-xs font-black uppercase tracking-[0.2em] text-champagne">
               Visit Us
             </div>
 
-            <h2 className="text-balance text-4xl font-black leading-tight text-white sm:text-5xl">
+            <h2 className="text-balance text-3xl font-black leading-tight text-white sm:text-4xl">
               Find Our Studio In The Heart Of Tampere
             </h2>
 
-            <p className="mt-5 text-base leading-8 text-white/75">
+            <p className="mt-5 text-sm leading-7 text-white/75 sm:text-base">
               Step into a warm, focused dance space where classical heritage, movement training,
               and academy guidance come together.
             </p>
@@ -33,10 +33,10 @@ export function ContactLocationSection({ onContactClick }: ContactLocationSectio
                   <MapPin size={22} />
                 </span>
                 <div>
-                  <p className="text-sm font-black uppercase tracking-[0.2em] text-champagne">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-champagne">
                     {academyLocation.name}
                   </p>
-                  <address className="mt-3 not-italic text-2xl font-black leading-snug text-white">
+                  <address className="mt-3 not-italic text-xl font-black leading-snug text-white">
                     {academyLocation.addressLine1}
                     <br />
                     {academyLocation.addressLine2}
@@ -48,10 +48,10 @@ export function ContactLocationSection({ onContactClick }: ContactLocationSectio
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
                 <Clock3 className="text-cyanGlow" size={22} />
-                <p className="mt-4 text-sm font-black uppercase tracking-[0.16em] text-white/60">
+                <p className="mt-4 text-xs font-black uppercase tracking-[0.14em] text-white/60">
                   Studio Visits
                 </p>
-                <p className="mt-2 text-lg font-bold text-white">By appointment</p>
+                <p className="mt-2 text-base font-bold text-white">By appointment</p>
               </div>
               <a
                 href={academyLocation.directionsUrl}
@@ -60,10 +60,10 @@ export function ContactLocationSection({ onContactClick }: ContactLocationSectio
                 className="group rounded-2xl border border-white/10 bg-white/5 p-5 transition hover:border-champagne/45 hover:bg-white/10"
               >
                 <Navigation className="text-champagne" size={22} />
-                <p className="mt-4 text-sm font-black uppercase tracking-[0.16em] text-white/60">
+                <p className="mt-4 text-xs font-black uppercase tracking-[0.14em] text-white/60">
                   Directions
                 </p>
-                <p className="mt-2 inline-flex items-center gap-2 text-lg font-bold text-white">
+                <p className="mt-2 inline-flex items-center gap-2 text-base font-bold text-white">
                   Open in Maps
                   <ArrowRight size={18} className="transition group-hover:translate-x-1" />
                 </p>

@@ -34,15 +34,33 @@ import { createPortal } from "react-dom";
 import { Navigate, useNavigate } from "react-router-dom";
 import { danceImages } from "../assets/danceImages";
 import { PageHeader } from "../components/PageHeader";
+import {
+  attendanceRecordsCacheKey,
+  getTeacherAttendanceRecords,
+  saveTeacherAttendanceSession,
+} from "../services/attendanceService";
+import {
+  getTeacherEnrolments,
+  submittedEnrolmentApplicationsCacheKey,
+  submittedEnrolmentCacheKey,
+  updateTeacherEnrolmentStatus,
+} from "../services/enrolmentService";
+import {
+  createTeacherClass,
+  deleteTeacherClass,
+  getMyTeacherClasses,
+  teacherClassCacheKey,
+  updateTeacherClass,
+} from "../services/teacherClassService";
 import type { TeacherAuthentication } from "../types/auth";
 import { showConfirmAlert, showErrorAlert, showInfoAlert, showSuccessAlert } from "../utils/alerts";
 import { cn } from "../utils/cn";
 
 const sessionStorageKey = "sankalanaTeacherSession";
-const attendanceStorageKey = "sankalanaTeacherAttendanceRecords";
-const createdClassesStorageKey = "sankalanaTeacherCreatedClasses";
-const submittedEnrolmentStorageKey = "sankalanaStudentEnrolmentSubmitted";
-const submittedEnrolmentApplicationsStorageKey = "sankalanaStudentEnrolmentApplications";
+const attendanceStorageKey = attendanceRecordsCacheKey;
+const createdClassesStorageKey = teacherClassCacheKey;
+const submittedEnrolmentStorageKey = submittedEnrolmentCacheKey;
+const submittedEnrolmentApplicationsStorageKey = submittedEnrolmentApplicationsCacheKey;
 
 type AttendanceStatus = "present" | "absent" | "late";
 
@@ -298,25 +316,28 @@ function readCreatedClasses(): CreatedTeacherClass[] {
   }
 }
 
-function getTeacherClassOwner(teacher: TeacherAuthentication["teacher"]) {
-  return {
-    teacherId: teacher.id,
-    teacherName: teacher.fullName,
-    teacherUsername: teacher.username,
-    teacherSpecialization: teacher.danceStyles,
-    teacherExperienceYears: teacher.experienceYears,
-    teacherBiography: teacher.biography,
-    teacherAvatarFileName: teacher.avatarFileName,
-    teacherAvatarImageDataUrl: teacher.avatarImageDataUrl,
-  };
-}
-
 function isClassOwnedByTeacher(classItem: CreatedTeacherClass, teacher: TeacherAuthentication["teacher"]) {
   if (classItem.teacherId) {
     return classItem.teacherId === teacher.id;
   }
 
   return classItem.danceStyle === teacher.danceStyles;
+}
+
+function toTeacherClassPayload(classItem: CreatedTeacherClass): NewTeacherClassPayload {
+  return {
+    className: classItem.className,
+    danceStyle: classItem.danceStyle,
+    classLevel: classItem.classLevel,
+    description: classItem.description,
+    days: classItem.days,
+    startTime: classItem.startTime,
+    endTime: classItem.endTime,
+    studio: classItem.studio,
+    capacity: classItem.capacity,
+    posterFileName: classItem.posterFileName,
+    milestones: classItem.milestones,
+  };
 }
 
 function readTeacherReviewApplications(): TeacherReviewApplication[] {
@@ -849,6 +870,7 @@ function TeacherEnrolmentRequestsSection({
   teacher: TeacherAuthentication["teacher"];
 }) {
   const [applications, setApplications] = useState<TeacherReviewApplication[]>(() => getApplicationsForTeacher(teacher));
+  const [isLoadingRequests, setIsLoadingRequests] = useState(true);
   const [statusFilter, setStatusFilter] = useState<TeacherRequestStatusFilter>("All");
   const [classFilter, setClassFilter] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
@@ -884,6 +906,40 @@ function TeacherEnrolmentRequestsSection({
     );
   });
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadRequests() {
+      setIsLoadingRequests(true);
+
+      try {
+        await getMyTeacherClasses();
+        const teacherApplications = await getTeacherEnrolments();
+
+        if (isMounted) {
+          setApplications(teacherApplications);
+        }
+      } catch (error) {
+        if (isMounted) {
+          await showErrorAlert(
+            "Requests Not Loaded",
+            error instanceof Error ? error.message : "Unable to load enrolment requests.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingRequests(false);
+        }
+      }
+    }
+
+    void loadRequests();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [teacher.id]);
+
   async function handleDecision(application: TeacherReviewApplication, status: Exclude<TeacherReviewStatus, "Pending Review">) {
     const approving = status === "Approved";
     const result = await showConfirmAlert(
@@ -896,26 +952,24 @@ function TeacherEnrolmentRequestsSection({
       return;
     }
 
-    const updatedApplications = readTeacherReviewApplications().map((currentApplication) =>
-      currentApplication.applicationId === application.applicationId
-        ? {
-            ...currentApplication,
-            status,
-            reviewedAt: new Date().toISOString(),
-            reviewedByTeacherId: teacher.id,
-            adminComment: approving
-              ? `Accepted by ${teacher.fullName}.`
-              : `Rejected by ${teacher.fullName}. Please contact the academy for another suitable class.`,
-          }
-        : currentApplication,
-    );
+    try {
+      const updatedApplication = await updateTeacherEnrolmentStatus(application.applicationId, status);
+      const updatedApplications = applications.map((currentApplication) =>
+        currentApplication.applicationId === updatedApplication.applicationId ? updatedApplication : currentApplication,
+      );
 
-    persistTeacherReviewApplications(updatedApplications);
-    setApplications(updatedApplications.filter((currentApplication) => currentApplication.data.teacherId === teacher.id));
-    await showSuccessAlert(
-      approving ? "Enrolment Accepted" : "Enrolment Rejected",
-      `${application.data.personal.fullName}'s request has been ${approving ? "accepted" : "rejected"}.`,
-    );
+      persistTeacherReviewApplications(updatedApplications);
+      setApplications(updatedApplications);
+      await showSuccessAlert(
+        approving ? "Enrolment Accepted" : "Enrolment Rejected",
+        `${application.data.personal.fullName}'s request has been ${approving ? "accepted" : "rejected"}.`,
+      );
+    } catch (error) {
+      await showErrorAlert(
+        "Decision Not Saved",
+        error instanceof Error ? error.message : "Unable to update enrolment request.",
+      );
+    }
   }
 
   return (
@@ -1011,7 +1065,13 @@ function TeacherEnrolmentRequestsSection({
         </section>
       )}
 
-      {applications.length === 0 ? (
+      {isLoadingRequests && applications.length === 0 ? (
+        <article className="mt-10 rounded-[2rem] border border-white/[0.12] bg-white/[0.055] p-10 text-center shadow-[0_32px_110px_rgba(0,0,0,0.36)] backdrop-blur-xl">
+          <BadgeCheck className="mx-auto text-cyanGlow" size={44} />
+          <h2 className="mt-5 text-3xl font-black text-[#f4e7fb]">Loading enrolment requests</h2>
+          <p className="mt-3 text-sm font-semibold text-white/60">Checking the database for students who selected your classes.</p>
+        </article>
+      ) : applications.length === 0 ? (
         <article className="mt-10 overflow-hidden rounded-[2rem] border border-white/[0.12] bg-white/[0.055] shadow-[0_32px_110px_rgba(0,0,0,0.36)] backdrop-blur-xl">
           <div className="grid gap-8 p-7 lg:grid-cols-[1fr_24rem] lg:p-10">
             <div className="flex flex-col justify-center">
@@ -1192,46 +1252,69 @@ function TeacherClassesSection({
   const [createdClasses, setCreatedClasses] = useState<CreatedTeacherClass[]>(() =>
     readCreatedClasses().filter((classItem) => isClassOwnedByTeacher(classItem, teacher)),
   );
+  const [isLoadingClasses, setIsLoadingClasses] = useState(true);
   const [isAddClassOpen, setIsAddClassOpen] = useState(false);
   const [editingClass, setEditingClass] = useState<CreatedTeacherClass | null>(null);
   const totalCapacity = createdClasses.reduce((total, classItem) => total + classItem.capacity, 0);
   const weeklySessions = createdClasses.reduce((total, classItem) => total + classItem.days.length, 0);
 
   useEffect(() => {
-    const legacyTeacherClasses = createdClasses.filter((classItem) => !classItem.teacherId);
+    let isMounted = true;
 
-    if (legacyTeacherClasses.length === 0) {
-      return;
+    async function loadTeacherClasses() {
+      setIsLoadingClasses(true);
+
+      try {
+        const localOnlyClasses = readCreatedClasses().filter(
+          (classItem) => isClassOwnedByTeacher(classItem, teacher) && classItem.id.startsWith("CLS-"),
+        );
+        const classes = await getMyTeacherClasses();
+        const migratedClasses = [];
+
+        for (const classItem of localOnlyClasses) {
+          migratedClasses.push(await createTeacherClass(toTeacherClassPayload(classItem)));
+        }
+
+        if (isMounted) {
+          setCreatedClasses([...migratedClasses, ...classes]);
+        }
+      } catch (error) {
+        if (isMounted) {
+          await showErrorAlert(
+            "Classes Not Loaded",
+            error instanceof Error ? error.message : "Unable to load your classes.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingClasses(false);
+        }
+      }
     }
 
-    const owner = getTeacherClassOwner(teacher);
-    const legacyClassIds = new Set(legacyTeacherClasses.map((classItem) => classItem.id));
-    const nextAllClasses = readCreatedClasses().map((classItem) =>
-      legacyClassIds.has(classItem.id) ? { ...classItem, ...owner } : classItem,
-    );
-    const nextTeacherClasses = createdClasses.map((classItem) =>
-      legacyClassIds.has(classItem.id) ? { ...classItem, ...owner } : classItem,
-    );
+    void loadTeacherClasses();
 
-    localStorage.setItem(createdClassesStorageKey, JSON.stringify(nextAllClasses));
-    setCreatedClasses(nextTeacherClasses);
-  }, [createdClasses, teacher]);
+    return () => {
+      isMounted = false;
+    };
+  }, [teacher.id]);
 
   async function handleCreateClass(payload: NewTeacherClassPayload) {
-    const classPayload: CreatedTeacherClass = {
-      id: `CLS-${Date.now()}`,
-      ...getTeacherClassOwner(teacher),
-      ...payload,
-      createdAt: new Date().toISOString(),
-    };
-    const allClasses = readCreatedClasses();
-    const nextAllClasses = [classPayload, ...allClasses];
-    const nextClasses = [classPayload, ...createdClasses];
+    try {
+      const savedClass = await createTeacherClass(payload);
 
-    setCreatedClasses(nextClasses);
-    localStorage.setItem(createdClassesStorageKey, JSON.stringify(nextAllClasses));
-    setIsAddClassOpen(false);
-    await showSuccessAlert("Class Saved", `${classPayload.className} has been saved.`);
+      setCreatedClasses((currentClasses) => [
+        savedClass,
+        ...currentClasses.filter((classItem) => classItem.id !== savedClass.id),
+      ]);
+      setIsAddClassOpen(false);
+      await showSuccessAlert("Class Saved", `${savedClass.className} has been saved.`);
+    } catch (error) {
+      await showErrorAlert(
+        "Class Not Saved",
+        error instanceof Error ? error.message : "Unable to save class.",
+      );
+    }
   }
 
   async function handleUpdateClass(payload: NewTeacherClassPayload) {
@@ -1239,22 +1322,20 @@ function TeacherClassesSection({
       return;
     }
 
-    const updatedClass: CreatedTeacherClass = {
-      ...editingClass,
-      ...getTeacherClassOwner(teacher),
-      ...payload,
-    };
-    const nextAllClasses = readCreatedClasses().map((classItem) =>
-      classItem.id === editingClass.id ? updatedClass : classItem,
-    );
-    const nextClasses = createdClasses.map((classItem) =>
-      classItem.id === editingClass.id ? updatedClass : classItem,
-    );
+    try {
+      const updatedClass = await updateTeacherClass(editingClass.id, payload);
 
-    setCreatedClasses(nextClasses);
-    localStorage.setItem(createdClassesStorageKey, JSON.stringify(nextAllClasses));
-    setEditingClass(null);
-    await showSuccessAlert("Class Updated", `${updatedClass.className} has been updated.`);
+      setCreatedClasses((currentClasses) =>
+        currentClasses.map((classItem) => (classItem.id === editingClass.id ? updatedClass : classItem)),
+      );
+      setEditingClass(null);
+      await showSuccessAlert("Class Updated", `${updatedClass.className} has been updated.`);
+    } catch (error) {
+      await showErrorAlert(
+        "Class Not Updated",
+        error instanceof Error ? error.message : "Unable to update class.",
+      );
+    }
   }
 
   async function handleDeleteClass(classItem: CreatedTeacherClass) {
@@ -1268,12 +1349,16 @@ function TeacherClassesSection({
       return;
     }
 
-    const nextClasses = createdClasses.filter((currentClass) => currentClass.id !== classItem.id);
-    const nextAllClasses = readCreatedClasses().filter((currentClass) => currentClass.id !== classItem.id);
-
-    setCreatedClasses(nextClasses);
-    localStorage.setItem(createdClassesStorageKey, JSON.stringify(nextAllClasses));
-    await showSuccessAlert("Class Deleted", `${classItem.className} has been removed.`);
+    try {
+      await deleteTeacherClass(classItem.id);
+      setCreatedClasses((currentClasses) => currentClasses.filter((currentClass) => currentClass.id !== classItem.id));
+      await showSuccessAlert("Class Deleted", `${classItem.className} has been removed.`);
+    } catch (error) {
+      await showErrorAlert(
+        "Class Not Deleted",
+        error instanceof Error ? error.message : "Unable to delete class.",
+      );
+    }
   }
 
   return (
@@ -1297,7 +1382,13 @@ function TeacherClassesSection({
         </button>
       </div>
 
-      {createdClasses.length === 0 ? (
+      {isLoadingClasses && createdClasses.length === 0 ? (
+        <article className="mt-12 rounded-[2rem] border border-white/[0.12] bg-white/[0.055] p-10 text-center shadow-[0_32px_110px_rgba(0,0,0,0.36)] backdrop-blur-xl">
+          <Sparkles className="mx-auto text-[#f0b7ff]" size={44} />
+          <h2 className="mt-5 text-3xl font-black text-[#f4e7fb]">Loading your classes</h2>
+          <p className="mt-3 text-sm font-semibold text-white/60">Checking the database for your saved class schedule.</p>
+        </article>
+      ) : createdClasses.length === 0 ? (
         <article className="mt-12 overflow-hidden rounded-[2rem] border border-white/[0.12] bg-white/[0.055] shadow-[0_32px_110px_rgba(0,0,0,0.36)] backdrop-blur-xl">
           <div className="grid gap-8 p-7 lg:grid-cols-[1fr_26rem] lg:p-10">
             <div className="flex flex-col justify-center">
@@ -1827,6 +1918,33 @@ function TeacherAttendanceSection() {
   const [recordStatusFilter, setRecordStatusFilter] = useState("all");
   const [recordsPage, setRecordsPage] = useState(1);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadAttendanceRecords() {
+      try {
+        const databaseRecords = await getTeacherAttendanceRecords();
+
+        if (isMounted) {
+          setRecords(databaseRecords);
+        }
+      } catch (error) {
+        if (isMounted) {
+          await showErrorAlert(
+            "Attendance Not Loaded",
+            error instanceof Error ? error.message : "Unable to load attendance records.",
+          );
+        }
+      }
+    }
+
+    void loadAttendanceRecords();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const selectedClass = attendanceClasses.find((classItem) => classItem.id === selectedClassId) ?? attendanceClasses[0];
   const markedCount = attendanceStudents.filter((student) => attendanceEntries[student.id]?.status).length;
   const progressPercent = Math.round((markedCount / attendanceStudents.length) * 100);
@@ -1908,17 +2026,35 @@ function TeacherAttendanceSection() {
         remarks: entry.remarks.trim(),
       };
     });
-    const recordsWithoutCurrentSession = records.filter(
-      (record) => !(record.classId === selectedClass.id && record.date === selectedDate),
-    );
-    const nextRecords = [...sessionRecords, ...recordsWithoutCurrentSession];
+    try {
+      const savedSessionRecords = await saveTeacherAttendanceSession({
+        classId: selectedClass.id,
+        className: selectedClass.name,
+        date: selectedDate,
+        records: sessionRecords.map((record) => ({
+          studentId: record.studentId,
+          studentName: record.studentName,
+          status: record.status,
+          remarks: record.remarks,
+        })),
+      });
+      const recordsWithoutCurrentSession = records.filter(
+        (record) => !(record.classId === selectedClass.id && record.date === selectedDate),
+      );
+      const nextRecords = [...savedSessionRecords, ...recordsWithoutCurrentSession];
 
-    setRecords(nextRecords);
-    persistAttendanceRecords(nextRecords);
-    setRecordClassFilter(selectedClass.id);
-    setRecordDateFilter(selectedDate);
-    setRecordsPage(1);
-    await showSuccessAlert("Attendance Saved", `${selectedClass.name} attendance has been saved for ${formatAttendanceDate(selectedDate)}.`);
+      setRecords(nextRecords);
+      persistAttendanceRecords(nextRecords);
+      setRecordClassFilter(selectedClass.id);
+      setRecordDateFilter(selectedDate);
+      setRecordsPage(1);
+      await showSuccessAlert("Attendance Saved", `${selectedClass.name} attendance has been saved for ${formatAttendanceDate(selectedDate)}.`);
+    } catch (error) {
+      await showErrorAlert(
+        "Attendance Not Saved",
+        error instanceof Error ? error.message : "Unable to save attendance.",
+      );
+    }
   }
 
   return (

@@ -21,7 +21,15 @@ import { type ReactNode, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { brandAssets } from "../assets/brand";
 import { danceImages } from "../assets/danceImages";
+import {
+  createStudentEnrolment,
+  getStudentEnrolments,
+  submittedEnrolmentApplicationsCacheKey,
+  submittedEnrolmentCacheKey,
+} from "../services/enrolmentService";
+import { getAllTeacherClasses, teacherClassCacheKey } from "../services/teacherClassService";
 import type { StudentAuthentication } from "../types/auth";
+import { showErrorAlert } from "../utils/alerts";
 import { cn } from "../utils/cn";
 
 type EnrolmentStep = 1 | 2 | 3 | 4 | 5 | 6;
@@ -64,10 +72,10 @@ type SubmittedEnrolment = {
 type ValidationErrors = Record<string, string>;
 
 const draftStorageKey = "sankalanaStudentEnrolmentDraft";
-const submittedStorageKey = "sankalanaStudentEnrolmentSubmitted";
-const submittedApplicationsStorageKey = "sankalanaStudentEnrolmentApplications";
+const submittedStorageKey = submittedEnrolmentCacheKey;
+const submittedApplicationsStorageKey = submittedEnrolmentApplicationsCacheKey;
 const studentSessionStorageKey = "sankalanaStudentSession";
-const teacherCreatedClassesStorageKey = "sankalanaTeacherCreatedClasses";
+const teacherCreatedClassesStorageKey = teacherClassCacheKey;
 
 const emptyEnrolment: EnrolmentData = {
   danceStyleId: "",
@@ -566,6 +574,7 @@ export function StudentEnrolmentPage() {
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [notice, setNotice] = useState("");
   const [submitted, setSubmitted] = useState<SubmittedEnrolment | null>(null);
+  const [, setClassDataVersion] = useState(0);
 
   useEffect(() => {
     const shouldResume = (location.state as { resumeDraft?: boolean } | null)?.resumeDraft;
@@ -574,6 +583,30 @@ export function StudentEnrolmentPage() {
       continueDraft();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPageData() {
+      try {
+        await Promise.all([getAllTeacherClasses(), getStudentEnrolments().catch(() => [])]);
+
+        if (isMounted) {
+          setClassDataVersion((currentVersion) => currentVersion + 1);
+        }
+      } catch {
+        if (isMounted) {
+          setNotice("Teacher classes could not be loaded from the database right now.");
+        }
+      }
+    }
+
+    void loadPageData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const selectedStyle = getDanceStyle(data);
@@ -624,7 +657,7 @@ export function StudentEnrolmentPage() {
     setErrors({});
   }
 
-  function goNext() {
+  async function goNext() {
     const nextErrors = validateStep(step, data);
 
     if (Object.keys(nextErrors).length > 0) {
@@ -633,12 +666,19 @@ export function StudentEnrolmentPage() {
     }
 
     if (step === 6) {
-      const application = createSubmittedEnrolment(data);
+      try {
+        const application = await createStudentEnrolment(data);
 
-      persistSubmittedEnrolment(application);
-      localStorage.removeItem(draftStorageKey);
-      setSubmitted(application);
-      setPhase("success");
+        persistSubmittedEnrolment(application);
+        localStorage.removeItem(draftStorageKey);
+        setSubmitted(application);
+        setPhase("success");
+      } catch (error) {
+        await showErrorAlert(
+          "Enrolment Not Submitted",
+          error instanceof Error ? error.message : "Unable to submit enrolment.",
+        );
+      }
       return;
     }
 
